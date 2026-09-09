@@ -1,0 +1,106 @@
+@import "tailwindcss";
+
+/* next-themes toggles a `.dark` class on <html>; tell Tailwind v4 to key off it
+   instead of prefers-color-scheme (see .skills/pick-ui-library, next-themes). */
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: #ffffff;
+  --foreground: #18181b;
+
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --ring: #6366f1;
+
+  --accent: #4f46e5;
+  --accent-foreground: #ffffff;
+
+  --success: #16a34a;
+  --success-foreground: #ffffff;
+  --danger: #dc2626;
+  --danger-foreground: #ffffff;
+  --warning: #d97706;
+  --warning-foreground: #ffffff;
+
+  --surface: #ffffff;
+  --radius: 0.625rem;
+
+  /* emil-design-eng: custom easing curves, stronger than the CSS built-ins */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+}
+
+.dark {
+  --background: #0a0a0b;
+  --foreground: #f4f4f5;
+
+  --muted: #18181b;
+  --muted-foreground: #a1a1aa;
+
+  --border: #27272a;
+  --input: #27272a;
+  --ring: #818cf8;
+
+  --accent: #6366f1;
+  --accent-foreground: #ffffff;
+
+  --success: #22c55e;
+  --success-foreground: #052e13;
+  --danger: #ef4444;
+  --danger-foreground: #450a0a;
+  --warning: #f59e0b;
+  --warning-foreground: #451a03;
+
+  --surface: #0f0f11;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-surface: var(--surface);
+  --radius-md: var(--radius);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* apple-design: tighten large headings, keep body near-zero tracking */
+h1,
+h2,
+h3 {
+  letter-spacing: -0.02em;
+}
+
+/* apple-design + emil-design-eng: reduced motion means gentler, not zero */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

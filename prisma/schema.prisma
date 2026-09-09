@@ -1,0 +1,156 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  SALESPERSON
+  MANAGER
+}
+
+// draft -> pending_approval -> approved -> sending -> sent, or rejected.
+// "sending" reverts to "approved" on send failure (design.md decision #17).
+enum ProposalStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  SENDING
+  SENT
+  REJECTED
+}
+
+enum SectionKey {
+  INTRODUCTION
+  PROPOSED_SOLUTION
+  DELIVERABLES
+  TIMELINE
+  PRICING
+  NEXT_STEPS
+}
+
+enum ActivityAction {
+  GENERATED
+  GENERATION_FAILED
+  SECTION_REGENERATED
+  SECTION_REGENERATION_FAILED
+  SUBMITTED_FOR_APPROVAL
+  APPROVED
+  REJECTED
+  ALREADY_PROCESSED
+  PDF_GENERATED
+  PDF_GENERATION_FAILED
+  SENT
+  SEND_FAILED
+  ALREADY_SENT
+  LOGGING_FAILED
+  SUPPORTING_FILE_EXTRACTION_FAILED
+  USER_CONFIRMED_PROCEED_WITHOUT_FILE
+  USER_REUPLOADED_FILE
+  CLONED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  proposalsOwned     Proposal[]    @relation("ProposalOwner")
+  proposalsApproved  Proposal[]    @relation("ProposalApprovedBy")
+  proposalsRejected  Proposal[]    @relation("ProposalRejectedBy")
+  activityLogEntries ActivityLog[]
+
+  @@map("users")
+}
+
+model Proposal {
+  id     String         @id @default(cuid())
+  status ProposalStatus @default(DRAFT)
+
+  ownerId String
+  owner   User   @relation("ProposalOwner", fields: [ownerId], references: [id])
+
+  // intake fields (all 11 hard-required per design.md decision #9)
+  clientName          String
+  clientEmail         String
+  companyName         String
+  dateOfCall          DateTime
+  salespersonName     String
+  clientNeedsSummary  String @db.Text
+  projectScope        String @db.Text
+  goalsAndObjectives  String @db.Text
+  recommendedServices String @db.Text
+  proposedTimeline    String @db.Text
+  estimatedPricing    String @db.Text
+
+  // supporting material (decision #8, #18)
+  supportingText              String? @db.Text
+  supportingFileUrl           String?
+  supportingFileExtractedText String? @db.Text
+
+  // lineage — clone-and-redo instead of revert-to-draft (decision #5)
+  clonedFromId String?
+  clonedFrom   Proposal?  @relation("ProposalClone", fields: [clonedFromId], references: [id])
+  clones       Proposal[] @relation("ProposalClone")
+
+  // public delivery — cryptographically random, generated in application code, never a default id generator (decision #19)
+  publicToken String  @unique
+  pdfUrl      String?
+
+  approvedById String?
+  approvedBy   User?     @relation("ProposalApprovedBy", fields: [approvedById], references: [id])
+  approvedAt   DateTime?
+
+  rejectedById   String?
+  rejectedBy     User?     @relation("ProposalRejectedBy", fields: [rejectedById], references: [id])
+  rejectedAt     DateTime?
+  rejectionNote  String?   @db.Text
+
+  sentAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sections    ProposalSection[]
+  activityLog ActivityLog[]
+
+  @@index([ownerId])
+  @@index([status])
+  @@map("proposals")
+}
+
+model ProposalSection {
+  id         String     @id @default(cuid())
+  proposalId String
+  proposal   Proposal   @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  sectionKey SectionKey
+  content    String     @db.Text
+  position   Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([proposalId, sectionKey])
+  @@map("proposal_sections")
+}
+
+// the "logged in a central place" requirement + the debuggable failure trail (design.md, testing scenario 7)
+model ActivityLog {
+  id         String         @id @default(cuid())
+  proposalId String
+  proposal   Proposal       @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  actorId    String?
+  actor      User?          @relation(fields: [actorId], references: [id])
+  action     ActivityAction
+  detail     String?        @db.Text
+  createdAt  DateTime       @default(now())
+
+  @@index([proposalId])
+  @@map("activity_log")
+}
