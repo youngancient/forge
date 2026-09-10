@@ -49,7 +49,9 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="text-2xl tracking-[-0.02em]">Forge</CardTitle>
+          <CardTitle className="text-2xl font-bold tracking-[-0.03em] text-accent">
+            Forge
+          </CardTitle>
           <CardDescription>
             Sign in to draft, review, and send client proposals.
           </CardDescription>

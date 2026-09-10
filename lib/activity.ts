@@ -1,13 +1,7 @@
 import { prisma } from "@/lib/db";
 import { sendDiscordAlert } from "@/lib/discord";
+import { FAILURE_ACTIONS } from "@/lib/status";
 import type { ActivityAction } from "@prisma/client";
-
-const FAILURE_ACTIONS: ActivityAction[] = [
-  "GENERATION_FAILED",
-  "SECTION_REGENERATION_FAILED",
-  "PDF_GENERATION_FAILED",
-  "SEND_FAILED",
-];
 
 export async function logActivity(
   proposalId: string,

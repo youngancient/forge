@@ -1,9 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import type { ProposalStatus, SectionKey } from "@prisma/client";
+import { ArrowLeft, ChevronDown } from "lucide-react";
+import type { ActivityAction, ProposalStatus, SectionKey } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Textarea, Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +16,13 @@ import {
   DialogDescription,
   DialogClose,
 } from "@/components/ui/dialog";
-import { STATUS_LABEL, STATUS_BADGE_VARIANT } from "@/lib/status";
+import {
+  STATUS_LABEL,
+  STATUS_BADGE_VARIANT,
+  ACTIVITY_ACTION_LABEL,
+  FAILURE_ACTIONS,
+} from "@/lib/status";
+import { cn } from "@/lib/cn";
 
 const SECTION_LABEL: Record<SectionKey, string> = {
   INTRODUCTION: "1. Introduction",
@@ -31,6 +38,7 @@ interface Section {
   sectionKey: SectionKey;
   content: string;
   position: number;
+  updatedAt: string;
 }
 
 interface SerializedProposal {
@@ -46,19 +54,72 @@ interface SerializedProposal {
   sections: Section[];
 }
 
+interface ActivityEntry {
+  id: string;
+  action: ActivityAction;
+  detail: string | null;
+  actorName: string | null;
+  createdAt: string;
+}
+
 export function ProposalDetail({
   proposal,
   isOwner,
+  activity,
 }: {
   proposal: SerializedProposal;
   isOwner: boolean;
+  activity: ActivityEntry[];
 }) {
   const router = useRouter();
   const isDraft = proposal.status === "DRAFT";
   const canAct = isOwner && isDraft;
+  const generationFailed = isDraft && proposal.sections.length === 0;
+
+  const [dirtySections, setDirtySections] = useState<Set<string>>(new Set());
+  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
+  const hasUnsavedChanges = dirtySections.size > 0;
+
+  const onSectionDirtyChange = useCallback(
+    (sectionId: string, isDirty: boolean) => {
+      setDirtySections((prev) => {
+        const next = new Set(prev);
+        if (isDirty) next.add(sectionId);
+        else next.delete(sectionId);
+        return next;
+      });
+    },
+    [],
+  );
+
+  function goBack() {
+    // Only trust "back" when we actually navigated here from within the app —
+    // a direct load/refresh has nowhere in-app to go back to.
+    const canGoBack =
+      window.history.length > 1 &&
+      document.referrer.startsWith(window.location.origin);
+    if (canGoBack) router.back();
+    else router.push("/dashboard");
+  }
+
+  function handleBackClick() {
+    if (hasUnsavedChanges) setLeaveConfirmOpen(true);
+    else goBack();
+  }
 
   return (
     <div className="flex flex-col gap-6">
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="-ml-2 self-start"
+        onClick={handleBackClick}
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back
+      </Button>
+
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-[-0.02em]">
@@ -66,9 +127,22 @@ export function ProposalDetail({
           </h1>
           <p className="text-sm text-muted-foreground">{proposal.clientName}</p>
         </div>
-        <Badge variant={STATUS_BADGE_VARIANT[proposal.status]}>
-          {STATUS_LABEL[proposal.status]}
-        </Badge>
+        <div className="flex flex-col items-end gap-1.5">
+          <Badge variant={STATUS_BADGE_VARIANT[proposal.status]}>
+            {STATUS_LABEL[proposal.status]}
+          </Badge>
+          {canAct && (
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span
+                className={cn(
+                  "h-1.5 w-1.5 rounded-full",
+                  hasUnsavedChanges ? "bg-muted-foreground" : "bg-success",
+                )}
+              />
+              {hasUnsavedChanges ? "Unsaved changes" : "All changes saved"}
+            </span>
+          )}
+        </div>
       </div>
 
       {proposal.status === "REJECTED" && proposal.rejectionNote && (
@@ -82,47 +156,249 @@ export function ProposalDetail({
         </Card>
       )}
 
-      <div className="flex flex-col gap-4">
-        {proposal.sections.map((section) => (
-          <SectionCard
-            key={section.id}
-            proposalId={proposal.id}
-            section={section}
-            editable={canAct}
-          />
-        ))}
-      </div>
+      {generationFailed ? (
+        <GenerationFailedCard proposalId={proposal.id} isOwner={isOwner} />
+      ) : (
+        <>
+          <div className="flex flex-col gap-4">
+            {proposal.sections.map((section) => (
+              <SectionCard
+                key={section.id}
+                proposalId={proposal.id}
+                section={section}
+                editable={canAct}
+                onDirtyChange={onSectionDirtyChange}
+              />
+            ))}
+          </div>
 
-      <ActionBar proposal={proposal} isOwner={isOwner} router={router} />
+          <ActionBar proposal={proposal} isOwner={isOwner} router={router} />
+        </>
+      )}
+
+      {!isDraft && <ActivityFeed entries={activity} />}
+
+      <Dialog open={leaveConfirmOpen} onOpenChange={setLeaveConfirmOpen}>
+        <DialogContent>
+          <DialogTitle>Unsaved changes</DialogTitle>
+          <DialogDescription className="mt-2">
+            Leave without saving these edits?
+          </DialogDescription>
+          <div className="mt-6 flex justify-end gap-2">
+            <DialogClose
+              render={
+                <Button type="button" variant="outline">
+                  Cancel
+                </Button>
+              }
+            />
+            <Button type="button" variant="destructive" onClick={goBack}>
+              Leave anyway
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
+function GenerationFailedCard({
+  proposalId,
+  isOwner,
+}: {
+  proposalId: string;
+  isOwner: boolean;
+}) {
+  const router = useRouter();
+  const [retrying, setRetrying] = useState(false);
+
+  async function retry() {
+    setRetrying(true);
+    try {
+      const res = await fetch(`/api/proposals/${proposalId}/generate`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        toast.error("Generation failed again — please try once more.");
+        return;
+      }
+      toast.success("Proposal generated.");
+      router.refresh();
+    } finally {
+      setRetrying(false);
+    }
+  }
+
+  return (
+    <Card className="border-warning/30 bg-warning/5">
+      <CardContent className="flex flex-col items-start gap-3 pt-6">
+        <div>
+          <p className="text-sm font-medium text-warning">
+            Generation failed
+          </p>
+          <p className="mt-1 text-sm text-foreground">
+            This proposal was created, but its content couldn&apos;t be
+            generated — no sections exist yet.{" "}
+            {isOwner
+              ? "You can retry generation below."
+              : "Only the owner can retry generation."}
+          </p>
+        </div>
+        {isOwner && (
+          <Button type="button" disabled={retrying} onClick={retry}>
+            {retrying ? "Generating…" : "Retry Generation"}
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ActivityFeed({ entries }: { entries: ActivityEntry[] }) {
+  return (
+    <details className="group rounded-lg border border-border bg-surface">
+      <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-medium text-foreground">
+        Activity
+        <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-150 ease-[var(--ease-out)] group-open:rotate-180" />
+      </summary>
+      <div className="flex flex-col divide-y divide-border border-t border-border">
+        {entries.length === 0 ? (
+          <p className="px-4 py-3 text-sm text-muted-foreground">
+            No activity yet.
+          </p>
+        ) : (
+          entries.map((entry) => (
+            <div
+              key={entry.id}
+              className="flex items-start justify-between gap-4 px-4 py-3"
+            >
+              <div className="min-w-0">
+                <span
+                  className={cn(
+                    "text-sm font-medium",
+                    FAILURE_ACTIONS.includes(entry.action)
+                      ? "text-danger"
+                      : "text-foreground",
+                  )}
+                >
+                  {ACTIVITY_ACTION_LABEL[entry.action]}
+                </span>
+                {entry.actorName && (
+                  <span className="text-sm text-muted-foreground">
+                    {" "}
+                    · {entry.actorName}
+                  </span>
+                )}
+                {entry.detail && (
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    {entry.detail}
+                  </p>
+                )}
+              </div>
+              <span className="whitespace-nowrap text-xs text-muted-foreground">
+                {new Date(entry.createdAt).toLocaleString([], {
+                  month: "short",
+                  day: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
+            </div>
+          ))
+        )}
+      </div>
+    </details>
+  );
+}
+
+const AUTOSAVE_DEBOUNCE_MS = 1500;
 
 function SectionCard({
   proposalId,
   section,
   editable,
+  onDirtyChange,
 }: {
   proposalId: string;
   section: Section;
   editable: boolean;
+  onDirtyChange: (sectionId: string, isDirty: boolean) => void;
 }) {
   const [content, setContent] = useState(section.content);
   const [instruction, setInstruction] = useState("");
   const [showInstruction, setShowInstruction] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState(
+    () => new Date(section.updatedAt),
+  );
+  const contentRef = useRef(content);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  async function saveEdit() {
-    if (content === section.content) return;
-    const res = await fetch(
-      `/api/proposals/${proposalId}/sections/${section.sectionKey}`,
-      {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
-      },
-    );
-    if (!res.ok) toast.error("Couldn't save your edit.");
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    onDirtyChange(section.id, dirty);
+    return () => onDirtyChange(section.id, false);
+  }, [dirty, section.id, onDirtyChange]);
+
+  // Standard "unsaved changes" safety net for the narrow window between a
+  // keystroke and the debounced/blur save actually completing.
+  useEffect(() => {
+    if (!editable || !dirty) return;
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () =>
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [editable, dirty]);
+
+  async function saveEdit(value: string) {
+    setSaving(true);
+    try {
+      const res = await fetch(
+        `/api/proposals/${proposalId}/sections/${section.sectionKey}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: value }),
+        },
+      );
+      if (!res.ok) {
+        toast.error("Couldn't save your edit.");
+        return;
+      }
+      setDirty(false);
+      setLastSavedAt(new Date());
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function onContentChange(value: string) {
+    setContent(value);
+    contentRef.current = value;
+    setDirty(true);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      debounceRef.current = null;
+      saveEdit(contentRef.current);
+    }, AUTOSAVE_DEBOUNCE_MS);
+  }
+
+  function flushSave() {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    if (dirty && !saving) saveEdit(contentRef.current);
   }
 
   async function regenerate() {
@@ -141,10 +417,23 @@ function SectionCard({
         return;
       }
       const { content: newContent } = await res.json();
+      // A regenerate replaces the section outright, so any pending manual
+      // edit debounce would otherwise clobber it a moment later.
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
       setContent(newContent);
+      contentRef.current = newContent;
+      setDirty(false);
+      setLastSavedAt(new Date());
       setShowInstruction(false);
       setInstruction("");
-      toast.success("Section regenerated.");
+      const sectionName = SECTION_LABEL[section.sectionKey].replace(
+        /^\d+\.\s*/,
+        "",
+      );
+      toast.success(`${sectionName} section regenerated.`);
     } finally {
       setRegenerating(false);
     }
@@ -157,10 +446,26 @@ function SectionCard({
           {SECTION_LABEL[section.sectionKey]}
         </CardTitle>
         {editable && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-muted-foreground">
+              {saving
+                ? "Saving…"
+                : `Saved ${lastSavedAt.toDateString() === new Date().toDateString()
+                  ? lastSavedAt.toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                  : lastSavedAt.toLocaleString([], {
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                }`}
+            </span>
             <Button
               type="button"
-              variant="ghost"
+              variant="outline"
               size="sm"
               disabled={regenerating}
               onClick={() => setShowInstruction((v) => !v)}
@@ -192,8 +497,8 @@ function SectionCard({
           <Textarea
             className="min-h-32"
             value={content}
-            onChange={(e) => setContent(e.target.value)}
-            onBlur={saveEdit}
+            onChange={(e) => onContentChange(e.target.value)}
+            onBlur={flushSave}
           />
         ) : (
           <p className="whitespace-pre-wrap text-sm text-foreground">

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -12,7 +13,8 @@ import {
   SUPPORTING_FILE_MAX_BYTES,
   SUPPORTING_FILE_ACCEPT,
 } from "@/lib/validations";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/cn";
 import { Input, Textarea } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -53,6 +55,7 @@ export default function NewProposalPage() {
   const [file, setFile] = useState<File | null>(null);
   const [extractionDialogOpen, setExtractionDialogOpen] = useState(false);
   const [extractionMessage, setExtractionMessage] = useState("");
+  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
 
   const {
     register,
@@ -64,6 +67,16 @@ export default function NewProposalPage() {
   });
 
   const supportingText = watch("supportingText") ?? "";
+
+  useEffect(() => {
+    if (!submitting) return;
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [submitting]);
 
   function buildFormData(values: ProposalIntakeInput, proceedWithoutFile: boolean) {
     const formData = new FormData();
@@ -98,7 +111,14 @@ export default function NewProposalPage() {
 
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
-        toast.error(body.message || "Couldn't generate the proposal — please try again.");
+        toast.error(
+          body.message || "Couldn't generate the proposal — please try again.",
+        );
+        // The intake was saved even though generation failed — send them to
+        // the proposal so they can retry rather than stranding them here.
+        if (body.error === "GENERATION_FAILED" && body.proposalId) {
+          router.push(`/proposals/${body.proposalId}`);
+        }
         return;
       }
 
@@ -126,8 +146,34 @@ export default function NewProposalPage() {
     setFile(selected);
   }
 
+  function goBack() {
+    // Only trust "back" when we actually navigated here from within the app —
+    // a direct load/refresh has nowhere in-app to go back to.
+    const canGoBack =
+      window.history.length > 1 &&
+      document.referrer.startsWith(window.location.origin);
+    if (canGoBack) router.back();
+    else router.push("/dashboard");
+  }
+
+  function handleBackClick() {
+    if (submitting) setLeaveConfirmOpen(true);
+    else goBack();
+  }
+
   return (
     <div className="flex flex-col gap-6">
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="-ml-2 self-start"
+        onClick={handleBackClick}
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back
+      </Button>
+
       <div>
         <h1 className="text-2xl font-semibold tracking-[-0.02em]">
           New Proposal
@@ -152,11 +198,21 @@ export default function NewProposalPage() {
               <div key={field.name} className="flex flex-col gap-1.5">
                 <Label htmlFor={field.name}>{field.label}</Label>
                 {field.multiline ? (
-                  <Textarea id={field.name} {...register(field.name)} />
+                  <Textarea
+                    id={field.name}
+                    disabled={submitting}
+                    {...register(field.name)}
+                  />
                 ) : (
                   <Input
                     id={field.name}
                     type={field.type ?? "text"}
+                    disabled={submitting}
+                    onClick={
+                      field.type === "date"
+                        ? (e) => e.currentTarget.showPicker?.()
+                        : undefined
+                    }
                     {...register(field.name)}
                   />
                 )}
@@ -168,38 +224,75 @@ export default function NewProposalPage() {
               </div>
             ))}
 
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="supportingText">
-                Supporting Notes (optional)
-              </Label>
-              <Textarea
-                id="supportingText"
-                className="min-h-40"
-                placeholder="Paste call notes, a transcript, or other context…"
-                {...register("supportingText")}
-              />
-              <p className="text-xs text-muted-foreground">
-                {supportingText.length.toLocaleString()} /{" "}
-                {SUPPORTING_TEXT_MAX.toLocaleString()} characters
-              </p>
-              {errors.supportingText && (
-                <p className="text-sm text-danger">
-                  {errors.supportingText.message}
+            <div className="flex flex-col gap-4 rounded-lg border border-border bg-muted/30 p-4">
+              <div>
+                <h2 className="text-sm font-semibold text-foreground">
+                  Supporting Material
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Optional — paste notes or a transcript, attach a file, or
+                  both.
                 </p>
-              )}
-            </div>
+              </div>
 
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="supportingFile">
-                Supporting File (optional, PDF/DOC/DOCX/TXT, max 2MB)
-              </Label>
-              <input
-                id="supportingFile"
-                type="file"
-                accept=".pdf,.doc,.docx,.txt"
-                onChange={(e) => onFileChange(e.target.files?.[0] ?? null)}
-                className="text-sm"
-              />
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="supportingText">Supporting Notes</Label>
+                <Textarea
+                  id="supportingText"
+                  className="min-h-40"
+                  placeholder="Paste call notes, a transcript, or other context…"
+                  disabled={submitting}
+                  {...register("supportingText")}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {supportingText.length.toLocaleString()} /{" "}
+                  {SUPPORTING_TEXT_MAX.toLocaleString()} characters
+                </p>
+                {errors.supportingText && (
+                  <p className="text-sm text-danger">
+                    {errors.supportingText.message}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="supportingFile">
+                  Supporting File (PDF, DOC, DOCX, or TXT — max 2MB)
+                </Label>
+                <div className="flex items-center gap-3">
+                  <label
+                    htmlFor="supportingFile"
+                    className={cn(
+                      buttonVariants({ variant: "outline", size: "sm" }),
+                      submitting && "pointer-events-none opacity-50",
+                    )}
+                  >
+                    Choose File
+                  </label>
+                  <input
+                    id="supportingFile"
+                    type="file"
+                    accept=".pdf,.doc,.docx,.txt"
+                    onChange={(e) => onFileChange(e.target.files?.[0] ?? null)}
+                    disabled={submitting}
+                    className="hidden"
+                  />
+                  <span className="truncate text-sm text-muted-foreground">
+                    {file ? file.name : "No file chosen"}
+                  </span>
+                  {file && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      disabled={submitting}
+                      onClick={() => setFile(null)}
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </div>
+              </div>
             </div>
 
             <Button type="submit" disabled={submitting} className="mt-2 self-start">
@@ -240,6 +333,29 @@ export default function NewProposalPage() {
                 </Button>
               }
             />
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={leaveConfirmOpen} onOpenChange={setLeaveConfirmOpen}>
+        <DialogContent>
+          <DialogTitle>Generation in progress</DialogTitle>
+          <DialogDescription className="mt-2">
+            The proposal is still being generated. If you leave now, it will
+            still be created, but you won&apos;t be taken to it automatically
+            — you&apos;ll need to find it from the dashboard instead.
+          </DialogDescription>
+          <div className="mt-6 flex justify-end gap-2">
+            <DialogClose
+              render={
+                <Button type="button" variant="outline">
+                  Stay on this page
+                </Button>
+              }
+            />
+            <Button type="button" variant="destructive" onClick={goBack}>
+              Leave anyway
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

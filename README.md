@@ -22,9 +22,12 @@ email, Vercel Blob for file storage, a Discord bot for failure alerts.
    npx prisma migrate dev
    npx prisma db seed
    ```
-   The seed script creates two accounts: `salesperson@forge.dev` and
-   `manager@forge.dev` (password `password123` unless overridden — see
-   `.env.example`).
+   The seed script creates three accounts — two salespeople
+   (`jude@forge.com`, `tofunmi@forge.com`) and one manager
+   (`morgan@forge.com`). Salesperson passwords come from
+   `SEED_SALESPERSON_PASSWORD` and the manager's from
+   `SEED_MANAGER_PASSWORD` — both required, no default — see
+   `.env.example`.
 3. Run the dev server:
    ```
    npm run dev

@@ -6,20 +6,34 @@ const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
 // No self-serve signup exists by design (design.md decision #7) — this is
-// the only way accounts get created. Override the default passwords via
-// env vars for anything beyond local/demo use.
+// the only way accounts get created. Passwords must come from env vars;
+
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`Missing required env var ${name} — refusing to seed with a fallback password.`);
+  }
+  return value;
+}
+
 const USERS = [
   {
-    name: "Sam Salesperson",
-    email: "salesperson@forge.dev",
+    name: "Jude",
+    email: "jude@forge.com",
     role: "SALESPERSON" as const,
-    password: process.env.SEED_SALESPERSON_PASSWORD ?? "password123",
+    password: requireEnv("SEED_SALESPERSON_PASSWORD"),
+  },
+  {
+    name: "Tofunmi",
+    email: "tofunmi@forge.com",
+    role: "SALESPERSON" as const,
+    password: requireEnv("SEED_SALESPERSON_PASSWORD"),
   },
   {
     name: "Morgan Manager",
-    email: "manager@forge.dev",
+    email: "morgan@forge.com",
     role: "MANAGER" as const,
-    password: process.env.SEED_MANAGER_PASSWORD ?? "password123",
+    password: requireEnv("SEED_MANAGER_PASSWORD"),
   },
 ];
 

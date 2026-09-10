@@ -1,7 +1,12 @@
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { ApprovalRow } from "./approval-row";
 
 export default async function ApprovalsPage() {
+  const session = await auth();
+  if (session?.user.role !== "MANAGER") redirect("/dashboard");
+
   const pending = await prisma.proposal.findMany({
     where: { status: "PENDING_APPROVAL" },
     orderBy: { updatedAt: "asc" },

@@ -5,6 +5,11 @@ import { logActivity } from "@/lib/activity";
 import { sendProposalEmail } from "@/lib/email";
 import { sendProposalSchema } from "@/lib/validations";
 
+// how long a proposal can sit in SENDING before it's treated as an
+// abandoned attempt (e.g. the process crashed mid-send) rather than one
+// still genuinely in flight, and becomes reclaimable by a retry.
+const SENDING_STALE_MS = 5 * 60 * 1000;
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -21,9 +26,21 @@ export async function POST(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // atomic conditional update: approved -> sending (design.md decision #17)
+    const staleCutoff = new Date(Date.now() - SENDING_STALE_MS);
+    const isStaleSending =
+      proposal.status === "SENDING" && proposal.updatedAt < staleCutoff;
+
+    // atomic conditional update: approved -> sending (design.md decision #17).
+    // also reclaimable from a stale "sending" (crash mid-send left it stuck —
+    // there is no other route back out of "sending"), not just from "approved".
     const claimed = await prisma.proposal.updateMany({
-      where: { id, status: "APPROVED" },
+      where: {
+        id,
+        OR: [
+          { status: "APPROVED" },
+          { status: "SENDING", updatedAt: { lt: staleCutoff } },
+        ],
+      },
       data: { status: "SENDING" },
     });
 
@@ -32,6 +49,15 @@ export async function POST(
         { error: "This proposal has already been sent or is in progress." },
         { status: 409 },
       );
+    }
+
+    if (isStaleSending) {
+      await logActivity(id, "SEND_RECLAIMED_AFTER_STALL", {
+        actorId: session.user.id,
+        detail: `Reclaimed after being stuck in SENDING for ${Math.round(
+          (Date.now() - proposal.updatedAt.getTime()) / 1000,
+        )}s`,
+      });
     }
 
     let pdfAttachment: { filename: string; content: Buffer } | undefined;

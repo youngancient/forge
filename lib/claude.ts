@@ -70,6 +70,7 @@ Rules:
 - Use only the facts given in the intake fields and supporting material. Never invent client-specific details — especially pricing, timeline, or scope — that were not provided.
 - Write in a warm, professional, confident tone suitable for sending directly to a client.
 - If supporting material is provided, weave in specific, relevant details from it rather than writing generically.
+- Write in plain text only — never use markdown formatting (no **bold**, no # headers, no markdown links). This content is displayed on-screen, exported to PDF, and emailed to the client as plain text, not rendered as markdown, so formatting syntax would show up literally. Plain paragraph breaks and a simple "-" for list items are fine.
 - Call the write_proposal_sections tool exactly once with the full content for every section.`;
 
 export interface GenerationInput {

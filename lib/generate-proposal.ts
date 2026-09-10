@@ -1,7 +1,27 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { generateProposalSections, type GenerationInput } from "@/lib/claude";
 import { logActivity } from "@/lib/activity";
+import { withRetry } from "@/lib/retry";
 import type { Proposal } from "@prisma/client";
+
+// Transient Neon/Postgres connection hiccups (e.g. a cold-started compute not
+// answering in time) surface as these Prisma error codes — worth a retry,
+// same as the Claude call above (design.md decision #16).
+const RETRYABLE_PRISMA_CODES = new Set([
+  "P1001",
+  "P1002",
+  "P1008",
+  "P1017",
+  "P2028",
+]);
+
+function isRetryablePrismaError(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    RETRYABLE_PRISMA_CODES.has(error.code)
+  );
+}
 
 const SECTION_ORDER = [
   "INTRODUCTION",
@@ -46,20 +66,24 @@ export async function runGeneration(proposalId: string): Promise<void> {
       toGenerationInput(proposal),
     );
 
-    await prisma.$transaction([
-      ...SECTION_ORDER.map((sectionKey, position) =>
-        prisma.proposalSection.upsert({
-          where: { proposalId_sectionKey: { proposalId, sectionKey } },
-          create: {
-            proposalId,
-            sectionKey,
-            position,
-            content: sectionValue(sections, sectionKey),
-          },
-          update: { content: sectionValue(sections, sectionKey) },
-        }),
-      ),
-    ]);
+    await withRetry(
+      () =>
+        prisma.$transaction([
+          ...SECTION_ORDER.map((sectionKey, position) =>
+            prisma.proposalSection.upsert({
+              where: { proposalId_sectionKey: { proposalId, sectionKey } },
+              create: {
+                proposalId,
+                sectionKey,
+                position,
+                content: sectionValue(sections, sectionKey),
+              },
+              update: { content: sectionValue(sections, sectionKey) },
+            }),
+          ),
+        ]),
+      isRetryablePrismaError,
+    );
 
     await logActivity(proposalId, "GENERATED");
   } catch (error) {

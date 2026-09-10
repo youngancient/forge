@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { FAILURE_ACTIONS } from "@/lib/status";
 import { ProposalDetail } from "./proposal-detail";
 
 export default async function ProposalPage({
@@ -22,6 +23,18 @@ export default async function ProposalPage({
   const isManager = session!.user.role === "MANAGER";
   if (!isOwner && !isManager) redirect("/dashboard");
 
+  // design.md: the activity log must be visible to the proposal's owner and
+  // any manager — both roles already passed the gate above. Not shown for
+  // drafts (project decision: draft-stage activity isn't audit-relevant).
+  const activity =
+    proposal.status === "DRAFT"
+      ? []
+      : await prisma.activityLog.findMany({
+        where: { proposalId: id },
+        orderBy: { createdAt: "desc" },
+        include: { actor: { select: { name: true } } },
+      });
+
   return (
     <ProposalDetail
       proposal={{
@@ -34,9 +47,26 @@ export default async function ProposalPage({
         dateOfCall: proposal.dateOfCall.toISOString(),
         rejectionNote: proposal.rejectionNote,
         pdfUrl: proposal.pdfUrl,
-        sections: proposal.sections,
+        sections: proposal.sections.map((s) => ({
+          id: s.id,
+          sectionKey: s.sectionKey,
+          content: s.content,
+          position: s.position,
+          updatedAt: s.updatedAt.toISOString(),
+        })),
       }}
       isOwner={isOwner}
+      activity={activity.map((entry) => ({
+        id: entry.id,
+        action: entry.action,
+        // Failure details are raw caught errors (stack traces, internal
+        // paths) — fine for Discord/server logs, never sent to the browser.
+        detail: FAILURE_ACTIONS.includes(entry.action)
+          ? "An internal error occurred — the team has been notified."
+          : entry.detail,
+        actorName: entry.actor?.name ?? null,
+        createdAt: entry.createdAt.toISOString(),
+      }))}
     />
   );
 }

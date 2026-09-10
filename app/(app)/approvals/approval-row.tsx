@@ -37,12 +37,18 @@ export function ApprovalRow({
       const res = await fetch(`/api/proposals/${proposal.id}/approve`, {
         method: "POST",
       });
+      const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
         toast.error(body.error || "Couldn't approve this proposal.");
         return;
       }
-      toast.success("Approved.");
+      if (body.pdfFailed) {
+        toast.warning(
+          "Approved, but PDF generation failed — try exporting again from the proposal page.",
+        );
+      } else {
+        toast.success("Approved.");
+      }
       router.refresh();
     } finally {
       setBusy(false);

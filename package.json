@@ -37,6 +37,10 @@
     "tailwind-merge": "^3.6.0",
     "zod": "^4.5.4"
   },
+  "overrides": {
+    "deepmerge-ts": "^8.0.2",
+    "mysql2": "^3.24.4"
+  },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",

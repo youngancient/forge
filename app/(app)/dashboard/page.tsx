@@ -5,6 +5,15 @@ import { buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { STATUS_LABEL, STATUS_BADGE_VARIANT } from "@/lib/status";
+import { DeleteProposalButton } from "./delete-proposal-button";
+
+function formatDate(date: Date) {
+  return date.toLocaleDateString([], {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -43,27 +52,37 @@ export default async function DashboardPage() {
       ) : (
         <div className="flex flex-col divide-y divide-border rounded-lg border border-border bg-surface">
           {proposals.map((p) => (
-            <Link
+            <div
               key={p.id}
-              href={`/proposals/${p.id}`}
-              className="flex items-center justify-between gap-4 px-5 py-4 transition-colors duration-150 ease-[var(--ease-out)] hover:bg-muted"
+              className="flex items-center gap-3 px-4 py-3 transition-colors duration-150 ease-[var(--ease-out)] hover:bg-muted"
             >
-              <div className="flex flex-col gap-0.5">
-                <span className="font-medium">{p.companyName}</span>
-                <span className="text-sm text-muted-foreground">
-                  {p.clientName}
-                  {isManager ? ` · ${p.owner.name}` : ""}
-                </span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-muted-foreground">
-                  {p.updatedAt.toLocaleDateString()}
+              <Link
+                href={`/proposals/${p.id}`}
+                className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-4"
+              >
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <span className="truncate font-medium">
+                    {p.companyName}
+                  </span>
+                  <span className="truncate text-sm text-muted-foreground">
+                    {p.clientName}
+                    {isManager ? ` · ${p.owner.name}` : ""}
+                  </span>
+                </div>
+                <span className="whitespace-nowrap text-xs text-muted-foreground">
+                  {formatDate(p.updatedAt)}
                 </span>
                 <Badge variant={STATUS_BADGE_VARIANT[p.status]}>
                   {STATUS_LABEL[p.status]}
                 </Badge>
-              </div>
-            </Link>
+              </Link>
+              {p.status === "DRAFT" && p.ownerId === session!.user.id && (
+                <DeleteProposalButton
+                  proposalId={p.id}
+                  companyName={p.companyName}
+                />
+              )}
+            </div>
           ))}
         </div>
       )}

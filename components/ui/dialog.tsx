@@ -40,5 +40,29 @@ export function DialogContent({
   );
 }
 
-export const DialogTitle = BaseDialog.Title;
-export const DialogDescription = BaseDialog.Description;
+export function DialogTitle({
+  className,
+  ...props
+}: React.ComponentProps<typeof BaseDialog.Title>) {
+  return (
+    <BaseDialog.Title
+      className={cn(
+        "text-lg font-semibold tracking-[-0.01em]",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+export function DialogDescription({
+  className,
+  ...props
+}: React.ComponentProps<typeof BaseDialog.Description>) {
+  return (
+    <BaseDialog.Description
+      className={cn("text-sm text-muted-foreground", className)}
+      {...props}
+    />
+  );
+}

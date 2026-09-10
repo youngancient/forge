@@ -13,6 +13,9 @@ enum Role {
 
 // draft -> pending_approval -> approved -> sending -> sent, or rejected.
 // "sending" reverts to "approved" on send failure (design.md decision #17).
+// a proposal stuck in "sending" past SENDING_STALE_MS (send/route.ts) is
+// treated as an abandoned attempt (e.g. process crash mid-send) and can be
+// reclaimed, since "sending" is otherwise a dead end with no other route in.
 enum ProposalStatus {
   DRAFT
   PENDING_APPROVAL
@@ -45,6 +48,7 @@ enum ActivityAction {
   SENT
   SEND_FAILED
   ALREADY_SENT
+  SEND_RECLAIMED_AFTER_STALL
   LOGGING_FAILED
   SUPPORTING_FILE_EXTRACTION_FAILED
   USER_CONFIRMED_PROCEED_WITHOUT_FILE

@@ -7,7 +7,6 @@ import {
   SUPPORTING_FILE_MAX_BYTES,
 } from "@/lib/validations";
 import { extractTextFromFile, ExtractionError } from "@/lib/extract-text";
-import { uploadBlob } from "@/lib/blob";
 import { generatePublicToken } from "@/lib/tokens";
 import { runGeneration } from "@/lib/generate-proposal";
 import { logActivity } from "@/lib/activity";
@@ -44,7 +43,6 @@ export async function POST(request: Request) {
     );
   }
 
-  let supportingFileUrl: string | undefined;
   let supportingFileExtractedText: string | undefined;
   let extractionFailed = false;
 
@@ -64,11 +62,6 @@ export async function POST(request: Request) {
 
     try {
       supportingFileExtractedText = await extractTextFromFile(file);
-      supportingFileUrl = await uploadBlob(
-        `supporting-material/${Date.now()}-${file.name}`,
-        Buffer.from(await file.arrayBuffer()),
-        file.type,
-      );
     } catch (error) {
       if (!(error instanceof ExtractionError)) throw error;
 
@@ -100,7 +93,6 @@ export async function POST(request: Request) {
       proposedTimeline: parsed.data.proposedTimeline,
       estimatedPricing: parsed.data.estimatedPricing,
       supportingText: parsed.data.supportingText || undefined,
-      supportingFileUrl,
       supportingFileExtractedText,
     },
   });
@@ -112,11 +104,15 @@ export async function POST(request: Request) {
   try {
     await runGeneration(proposal.id);
   } catch (error) {
+    // Full detail is already captured server-side via logActivity/Discord
+    // inside runGeneration — never forward raw error internals to the client.
+    console.error(error);
     return NextResponse.json(
       {
         error: "GENERATION_FAILED",
         proposalId: proposal.id,
-        message: String(error),
+        message:
+          "The proposal was created, but generating its content failed. You can retry generation from the proposal page.",
       },
       { status: 502 },
     );
