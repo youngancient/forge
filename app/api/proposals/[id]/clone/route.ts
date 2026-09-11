@@ -34,6 +34,7 @@ export async function POST(
         ownerId: original.ownerId,
         publicToken: generatePublicToken(),
         clonedFromId: original.id,
+        title: original.title,
         clientName: original.clientName,
         clientEmail: original.clientEmail,
         companyName: original.companyName,

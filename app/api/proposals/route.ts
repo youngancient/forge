@@ -10,8 +10,17 @@ import { extractTextFromFile, ExtractionError } from "@/lib/extract-text";
 import { generatePublicToken } from "@/lib/tokens";
 import { runGeneration } from "@/lib/generate-proposal";
 import { logActivity } from "@/lib/activity";
+import { apiErrorResponse } from "@/lib/api-auth";
 
 export async function POST(request: Request) {
+  try {
+    return await handlePost(request);
+  } catch (error) {
+    return apiErrorResponse(error);
+  }
+}
+
+async function handlePost(request: Request): Promise<NextResponse> {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

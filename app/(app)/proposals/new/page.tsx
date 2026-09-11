@@ -12,6 +12,10 @@ import {
   SUPPORTING_TEXT_MAX,
   SUPPORTING_FILE_MAX_BYTES,
   SUPPORTING_FILE_ACCEPT,
+  NAME_MAX,
+  EMAIL_MAX,
+  DATE_MAX,
+  NARRATIVE_FIELD_MAX,
 } from "@/lib/validations";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
@@ -31,22 +35,49 @@ const FIELDS: Array<{
   label: string;
   type?: "text" | "email" | "date";
   multiline?: boolean;
+  maxLength: number;
 }> = [
-  { name: "clientName", label: "Client Name" },
-  { name: "clientEmail", label: "Client Email", type: "email" },
-  { name: "companyName", label: "Company Name" },
-  { name: "dateOfCall", label: "Date of Call", type: "date" },
-  { name: "salespersonName", label: "Salesperson Name" },
-  { name: "clientNeedsSummary", label: "Summary of Client's Needs", multiline: true },
-  { name: "projectScope", label: "Project Scope", multiline: true },
-  { name: "goalsAndObjectives", label: "Goals and Objectives", multiline: true },
+  { name: "clientName", label: "Client Name", maxLength: NAME_MAX },
+  { name: "clientEmail", label: "Client Email", type: "email", maxLength: EMAIL_MAX },
+  { name: "companyName", label: "Company Name", maxLength: NAME_MAX },
+  { name: "dateOfCall", label: "Date of Call", type: "date", maxLength: DATE_MAX },
+  { name: "salespersonName", label: "Salesperson Name", maxLength: NAME_MAX },
+  {
+    name: "clientNeedsSummary",
+    label: "Summary of Client's Needs",
+    multiline: true,
+    maxLength: NARRATIVE_FIELD_MAX,
+  },
+  {
+    name: "projectScope",
+    label: "Project Scope",
+    multiline: true,
+    maxLength: NARRATIVE_FIELD_MAX,
+  },
+  {
+    name: "goalsAndObjectives",
+    label: "Goals and Objectives",
+    multiline: true,
+    maxLength: NARRATIVE_FIELD_MAX,
+  },
   {
     name: "recommendedServices",
     label: "Recommended Services or Deliverables",
     multiline: true,
+    maxLength: NARRATIVE_FIELD_MAX,
   },
-  { name: "proposedTimeline", label: "Proposed Timeline", multiline: true },
-  { name: "estimatedPricing", label: "Estimated Pricing", multiline: true },
+  {
+    name: "proposedTimeline",
+    label: "Proposed Timeline",
+    multiline: true,
+    maxLength: NARRATIVE_FIELD_MAX,
+  },
+  {
+    name: "estimatedPricing",
+    label: "Estimated Pricing",
+    multiline: true,
+    maxLength: NARRATIVE_FIELD_MAX,
+  },
 ];
 
 export default function NewProposalPage() {
@@ -66,7 +97,8 @@ export default function NewProposalPage() {
     resolver: zodResolver(proposalIntakeSchema),
   });
 
-  const supportingText = watch("supportingText") ?? "";
+  const values = watch();
+  const supportingText = values.supportingText ?? "";
 
   useEffect(() => {
     if (!submitting) return;
@@ -147,13 +179,13 @@ export default function NewProposalPage() {
   }
 
   function goBack() {
-    // Only trust "back" when we actually navigated here from within the app —
-    // a direct load/refresh has nowhere in-app to go back to.
-    const canGoBack =
-      window.history.length > 1 &&
-      document.referrer.startsWith(window.location.origin);
-    if (canGoBack) router.back();
-    else router.push("/dashboard");
+    // Always the dashboard, not browser history — router.back() could land
+    // on a stale cached view of a page that changed since it was last
+    // visited (e.g. the dashboard, right after this page just created a
+    // proposal). router.refresh() forces a real refetch instead of serving
+    // Next's client Router Cache.
+    router.push("/dashboard");
+    router.refresh();
   }
 
   function handleBackClick() {
@@ -201,6 +233,7 @@ export default function NewProposalPage() {
                   <Textarea
                     id={field.name}
                     disabled={submitting}
+                    maxLength={field.maxLength}
                     {...register(field.name)}
                   />
                 ) : (
@@ -208,6 +241,7 @@ export default function NewProposalPage() {
                     id={field.name}
                     type={field.type ?? "text"}
                     disabled={submitting}
+                    maxLength={field.maxLength}
                     onClick={
                       field.type === "date"
                         ? (e) => e.currentTarget.showPicker?.()
@@ -215,6 +249,12 @@ export default function NewProposalPage() {
                     }
                     {...register(field.name)}
                   />
+                )}
+                {field.multiline && (
+                  <p className="text-xs text-muted-foreground">
+                    {(values[field.name] ?? "").length.toLocaleString()} /{" "}
+                    {field.maxLength.toLocaleString()} characters
+                  </p>
                 )}
                 {errors[field.name] && (
                   <p className="text-sm text-danger">

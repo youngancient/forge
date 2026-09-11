@@ -80,6 +80,12 @@ model Proposal {
   ownerId String
   owner   User   @relation("ProposalOwner", fields: [ownerId], references: [id])
 
+  // AI-generated alongside the 6 sections (same tool call, no extra intake
+  // field or API call), and salesperson-editable afterward — disambiguates
+  // multiple proposals for the same client on the dashboard/approvals list.
+  // Null until the first successful generation.
+  title String?
+
   // intake fields (all 11 hard-required per design.md decision #9)
   clientName          String
   clientEmail         String
@@ -104,8 +110,9 @@ model Proposal {
   clones       Proposal[] @relation("ProposalClone")
 
   // public delivery — cryptographically random, generated in application code, never a default id generator (decision #19)
-  publicToken String  @unique
-  pdfUrl      String?
+  publicToken String @unique
+  // note: no pdfUrl column — PDFs are generated fresh on each export/attach
+  // request as of 2026-09-11 (decisions #4/#6/#14 revised), not cached.
 
   approvedById String?
   approvedBy   User?     @relation("ProposalApprovedBy", fields: [approvedById], references: [id])

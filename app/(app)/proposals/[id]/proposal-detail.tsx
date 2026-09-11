@@ -22,15 +22,16 @@ import {
   ACTIVITY_ACTION_LABEL,
   FAILURE_ACTIONS,
 } from "@/lib/status";
+import { NARRATIVE_FIELD_MAX } from "@/lib/validations";
 import { cn } from "@/lib/cn";
 
 const SECTION_LABEL: Record<SectionKey, string> = {
-  INTRODUCTION: "1. Introduction",
-  PROPOSED_SOLUTION: "2. Proposed Solution",
-  DELIVERABLES: "3. Deliverables",
-  TIMELINE: "4. Timeline",
-  PRICING: "5. Pricing",
-  NEXT_STEPS: "6. Next Steps",
+  INTRODUCTION: "Introduction",
+  PROPOSED_SOLUTION: "Proposed Solution",
+  DELIVERABLES: "Deliverables",
+  TIMELINE: "Timeline",
+  PRICING: "Pricing",
+  NEXT_STEPS: "Next Steps",
 };
 
 interface Section {
@@ -44,13 +45,16 @@ interface Section {
 interface SerializedProposal {
   id: string;
   status: ProposalStatus;
+  title: string | null;
+  creatorName: string;
+  creatorEmail: string;
   clientName: string;
   clientEmail: string;
   companyName: string;
   salespersonName: string;
   dateOfCall: string;
   rejectionNote: string | null;
-  pdfUrl: string | null;
+  sentAt: string | null;
   sections: Section[];
 }
 
@@ -58,6 +62,7 @@ interface ActivityEntry {
   id: string;
   action: ActivityAction;
   detail: string | null;
+  actorId: string | null;
   actorName: string | null;
   createdAt: string;
 }
@@ -65,10 +70,14 @@ interface ActivityEntry {
 export function ProposalDetail({
   proposal,
   isOwner,
+  isManager,
+  currentUserId,
   activity,
 }: {
   proposal: SerializedProposal;
   isOwner: boolean;
+  isManager: boolean;
+  currentUserId: string;
   activity: ActivityEntry[];
 }) {
   const router = useRouter();
@@ -77,8 +86,15 @@ export function ProposalDetail({
   const generationFailed = isDraft && proposal.sections.length === 0;
 
   const [dirtySections, setDirtySections] = useState<Set<string>>(new Set());
+  const [busySections, setBusySections] = useState<Set<string>>(new Set());
+  const [retrying, setRetrying] = useState(false);
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const hasUnsavedChanges = dirtySections.size > 0;
+  // Covers any in-flight AI call (per-section regenerate, or a full retry
+  // after failed generation) — not just unsaved manual edits — since leaving
+  // mid-request is just as easy to do accidentally as leaving mid-edit.
+  const hasBusyActivity = busySections.size > 0 || retrying;
+  const blocksNavigation = hasUnsavedChanges || hasBusyActivity;
 
   const onSectionDirtyChange = useCallback(
     (sectionId: string, isDirty: boolean) => {
@@ -92,6 +108,45 @@ export function ProposalDetail({
     [],
   );
 
+  const onSectionBusyChange = useCallback(
+    (sectionId: string, isBusy: boolean) => {
+      setBusySections((prev) => {
+        const next = new Set(prev);
+        if (isBusy) next.add(sectionId);
+        else next.delete(sectionId);
+        return next;
+      });
+    },
+    [],
+  );
+
+  // A stable wrapper — EditableTitle's onDirtyChange effect depends on this
+  // reference, so an inline arrow here would re-run the effect (and thus
+  // setDirtySections, which always returns a new Set) on every render.
+  const onTitleDirtyChange = useCallback(
+    (isDirty: boolean) => onSectionDirtyChange("title", isDirty),
+    [onSectionDirtyChange],
+  );
+
+  // Same reasoning — ActionBar's busy state (submit/send/clone/approve/
+  // reject) wasn't reported to the leave-confirm gate at all before this.
+  const onActionBarBusyChange = useCallback(
+    (isBusy: boolean) => onSectionBusyChange("actionbar", isBusy),
+    [onSectionBusyChange],
+  );
+
+  // Same safety net as SectionCard's per-edit beforeunload guard used to be,
+  // but centralized here so it also covers busy/retrying — not just dirty.
+  useEffect(() => {
+    if (!canAct || !blocksNavigation) return;
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [canAct, blocksNavigation]);
+
   function goBack() {
     // Only trust "back" when we actually navigated here from within the app —
     // a direct load/refresh has nowhere in-app to go back to.
@@ -100,10 +155,14 @@ export function ProposalDetail({
       document.referrer.startsWith(window.location.origin);
     if (canGoBack) router.back();
     else router.push("/dashboard");
+    // Whichever page we land on (dashboard, approvals list, etc.) may have
+    // changed since it was last visited (e.g. this proposal's status just
+    // changed) — force a real refetch instead of a stale Router Cache hit.
+    router.refresh();
   }
 
   function handleBackClick() {
-    if (hasUnsavedChanges) setLeaveConfirmOpen(true);
+    if (blocksNavigation) setLeaveConfirmOpen(true);
     else goBack();
   }
 
@@ -126,6 +185,11 @@ export function ProposalDetail({
             {proposal.companyName}
           </h1>
           <p className="text-sm text-muted-foreground">{proposal.clientName}</p>
+          {isManager && (
+            <p className="text-xs text-muted-foreground">
+              Created by {proposal.creatorName} &lt;{proposal.creatorEmail}&gt;
+            </p>
+          )}
         </div>
         <div className="flex flex-col items-end gap-1.5">
           <Badge variant={STATUS_BADGE_VARIANT[proposal.status]}>
@@ -157,10 +221,20 @@ export function ProposalDetail({
       )}
 
       {generationFailed ? (
-        <GenerationFailedCard proposalId={proposal.id} isOwner={isOwner} />
+        <GenerationFailedCard
+          proposalId={proposal.id}
+          isOwner={isOwner}
+          onRetryingChange={setRetrying}
+        />
       ) : (
         <>
           <div className="flex flex-col gap-4">
+            <EditableTitle
+              proposalId={proposal.id}
+              title={proposal.title}
+              editable={canAct}
+              onDirtyChange={onTitleDirtyChange}
+            />
             {proposal.sections.map((section) => (
               <SectionCard
                 key={section.id}
@@ -168,21 +242,31 @@ export function ProposalDetail({
                 section={section}
                 editable={canAct}
                 onDirtyChange={onSectionDirtyChange}
+                onBusyChange={onSectionBusyChange}
               />
             ))}
           </div>
 
-          <ActionBar proposal={proposal} isOwner={isOwner} router={router} />
+          <ActionBar
+            proposal={proposal}
+            isOwner={isOwner}
+            isManager={isManager}
+            router={router}
+            onBusyChange={onActionBarBusyChange}
+          />
         </>
       )}
 
-      {!isDraft && <ActivityFeed entries={activity} />}
+      {!isDraft && (
+        <ActivityFeed entries={activity} currentUserId={currentUserId} />
+      )}
 
       <Dialog open={leaveConfirmOpen} onOpenChange={setLeaveConfirmOpen}>
         <DialogContent>
-          <DialogTitle>Unsaved changes</DialogTitle>
+          <DialogTitle>Leave this page?</DialogTitle>
           <DialogDescription className="mt-2">
-            Leave without saving these edits?
+            You have unsaved changes or a generation in progress. Leave
+            anyway?
           </DialogDescription>
           <div className="mt-6 flex justify-end gap-2">
             <DialogClose
@@ -205,12 +289,19 @@ export function ProposalDetail({
 function GenerationFailedCard({
   proposalId,
   isOwner,
+  onRetryingChange,
 }: {
   proposalId: string;
   isOwner: boolean;
+  onRetryingChange: (isRetrying: boolean) => void;
 }) {
   const router = useRouter();
   const [retrying, setRetrying] = useState(false);
+
+  useEffect(() => {
+    onRetryingChange(retrying);
+    return () => onRetryingChange(false);
+  }, [retrying, onRetryingChange]);
 
   async function retry() {
     setRetrying(true);
@@ -254,7 +345,13 @@ function GenerationFailedCard({
   );
 }
 
-function ActivityFeed({ entries }: { entries: ActivityEntry[] }) {
+function ActivityFeed({
+  entries,
+  currentUserId,
+}: {
+  entries: ActivityEntry[];
+  currentUserId: string;
+}) {
   return (
     <details className="group rounded-lg border border-border bg-surface">
       <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-medium text-foreground">
@@ -286,7 +383,7 @@ function ActivityFeed({ entries }: { entries: ActivityEntry[] }) {
                 {entry.actorName && (
                   <span className="text-sm text-muted-foreground">
                     {" "}
-                    · {entry.actorName}
+                    · {entry.actorId === currentUserId ? "You" : entry.actorName}
                   </span>
                 )}
                 {entry.detail && (
@@ -313,27 +410,22 @@ function ActivityFeed({ entries }: { entries: ActivityEntry[] }) {
 
 const AUTOSAVE_DEBOUNCE_MS = 1500;
 
-function SectionCard({
-  proposalId,
-  section,
-  editable,
-  onDirtyChange,
-}: {
-  proposalId: string;
-  section: Section;
-  editable: boolean;
-  onDirtyChange: (sectionId: string, isDirty: boolean) => void;
-}) {
-  const [content, setContent] = useState(section.content);
-  const [instruction, setInstruction] = useState("");
-  const [showInstruction, setShowInstruction] = useState(false);
-  const [regenerating, setRegenerating] = useState(false);
+// Shared by SectionCard's manual-edit autosave and EditableTitle — debounced
+// save on change, immediate flush on blur, plus a `replace` escape hatch for
+// content swapped in from elsewhere (e.g. an AI regenerate result) that
+// should be treated as already-saved, not as a pending edit to debounce.
+function useAutosaveField(
+  initialValue: string,
+  save: (value: string) => Promise<boolean>,
+  initialLastSavedAt?: Date,
+) {
+  const [value, setValue] = useState(initialValue);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState(
-    () => new Date(section.updatedAt),
+    () => initialLastSavedAt ?? new Date(),
   );
-  const contentRef = useRef(content);
+  const valueRef = useRef(value);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -342,27 +434,142 @@ function SectionCard({
     };
   }, []);
 
-  useEffect(() => {
-    onDirtyChange(section.id, dirty);
-    return () => onDirtyChange(section.id, false);
-  }, [dirty, section.id, onDirtyChange]);
-
-  // Standard "unsaved changes" safety net for the narrow window between a
-  // keystroke and the debounced/blur save actually completing.
-  useEffect(() => {
-    if (!editable || !dirty) return;
-    function handleBeforeUnload(e: BeforeUnloadEvent) {
-      e.preventDefault();
-      e.returnValue = "";
-    }
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () =>
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [editable, dirty]);
-
-  async function saveEdit(value: string) {
+  async function commit(v: string) {
     setSaving(true);
     try {
+      const ok = await save(v);
+      if (ok) {
+        setDirty(false);
+        setLastSavedAt(new Date());
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function onChange(v: string) {
+    setValue(v);
+    valueRef.current = v;
+    setDirty(true);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      debounceRef.current = null;
+      commit(valueRef.current);
+    }, AUTOSAVE_DEBOUNCE_MS);
+  }
+
+  function flush() {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    if (dirty && !saving) commit(valueRef.current);
+  }
+
+  function replace(v: string) {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    setValue(v);
+    valueRef.current = v;
+    setDirty(false);
+    setLastSavedAt(new Date());
+  }
+
+  return { value, onChange, saving, dirty, lastSavedAt, flush, replace };
+}
+
+function EditableTitle({
+  proposalId,
+  title,
+  editable,
+  onDirtyChange,
+}: {
+  proposalId: string;
+  title: string | null;
+  editable: boolean;
+  onDirtyChange: (isDirty: boolean) => void;
+}) {
+  const field = useAutosaveField(title ?? "", async (value) => {
+    const res = await fetch(`/api/proposals/${proposalId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: value }),
+    });
+    if (!res.ok) {
+      toast.error("Couldn't save the title.");
+      return false;
+    }
+    return true;
+  });
+
+  useEffect(() => {
+    onDirtyChange(field.dirty);
+    return () => onDirtyChange(false);
+  }, [field.dirty, onDirtyChange]);
+
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between pb-2">
+        <CardTitle className="text-base">Title</CardTitle>
+        {editable && (
+          <span className="text-xs text-muted-foreground">
+            {field.saving
+              ? "Saving…"
+              : `Saved ${field.lastSavedAt.toDateString() === new Date().toDateString()
+                ? field.lastSavedAt.toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+                : field.lastSavedAt.toLocaleString([], {
+                  month: "short",
+                  day: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+              }`}
+          </span>
+        )}
+      </CardHeader>
+      <CardContent>
+        {editable ? (
+          <Input
+            value={field.value}
+            placeholder="Untitled Proposal"
+            onChange={(e) => field.onChange(e.target.value)}
+            onBlur={field.flush}
+          />
+        ) : (
+          <p className="text-sm text-foreground">
+            {title || "Untitled Proposal"}
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function SectionCard({
+  proposalId,
+  section,
+  editable,
+  onDirtyChange,
+  onBusyChange,
+}: {
+  proposalId: string;
+  section: Section;
+  editable: boolean;
+  onDirtyChange: (sectionId: string, isDirty: boolean) => void;
+  onBusyChange: (sectionId: string, isBusy: boolean) => void;
+}) {
+  const [instruction, setInstruction] = useState("");
+  const [showInstruction, setShowInstruction] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+
+  const field = useAutosaveField(
+    section.content,
+    async (value) => {
       const res = await fetch(
         `/api/proposals/${proposalId}/sections/${section.sectionKey}`,
         {
@@ -373,33 +580,22 @@ function SectionCard({
       );
       if (!res.ok) {
         toast.error("Couldn't save your edit.");
-        return;
+        return false;
       }
-      setDirty(false);
-      setLastSavedAt(new Date());
-    } finally {
-      setSaving(false);
-    }
-  }
+      return true;
+    },
+    new Date(section.updatedAt),
+  );
 
-  function onContentChange(value: string) {
-    setContent(value);
-    contentRef.current = value;
-    setDirty(true);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      debounceRef.current = null;
-      saveEdit(contentRef.current);
-    }, AUTOSAVE_DEBOUNCE_MS);
-  }
+  useEffect(() => {
+    onDirtyChange(section.id, field.dirty);
+    return () => onDirtyChange(section.id, false);
+  }, [field.dirty, section.id, onDirtyChange]);
 
-  function flushSave() {
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-      debounceRef.current = null;
-    }
-    if (dirty && !saving) saveEdit(contentRef.current);
-  }
+  useEffect(() => {
+    onBusyChange(section.id, regenerating);
+    return () => onBusyChange(section.id, false);
+  }, [regenerating, section.id, onBusyChange]);
 
   async function regenerate() {
     setRegenerating(true);
@@ -419,21 +615,10 @@ function SectionCard({
       const { content: newContent } = await res.json();
       // A regenerate replaces the section outright, so any pending manual
       // edit debounce would otherwise clobber it a moment later.
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-        debounceRef.current = null;
-      }
-      setContent(newContent);
-      contentRef.current = newContent;
-      setDirty(false);
-      setLastSavedAt(new Date());
+      field.replace(newContent);
       setShowInstruction(false);
       setInstruction("");
-      const sectionName = SECTION_LABEL[section.sectionKey].replace(
-        /^\d+\.\s*/,
-        "",
-      );
-      toast.success(`${sectionName} section regenerated.`);
+      toast.success(`${SECTION_LABEL[section.sectionKey]} section regenerated.`);
     } finally {
       setRegenerating(false);
     }
@@ -448,14 +633,14 @@ function SectionCard({
         {editable && (
           <div className="flex items-center gap-3">
             <span className="text-xs text-muted-foreground">
-              {saving
+              {field.saving
                 ? "Saving…"
-                : `Saved ${lastSavedAt.toDateString() === new Date().toDateString()
-                  ? lastSavedAt.toLocaleTimeString([], {
+                : `Saved ${field.lastSavedAt.toDateString() === new Date().toDateString()
+                  ? field.lastSavedAt.toLocaleTimeString([], {
                     hour: "2-digit",
                     minute: "2-digit",
                   })
-                  : lastSavedAt.toLocaleString([], {
+                  : field.lastSavedAt.toLocaleString([], {
                     month: "short",
                     day: "numeric",
                     hour: "2-digit",
@@ -494,15 +679,23 @@ function SectionCard({
           </div>
         )}
         {editable ? (
-          <Textarea
-            className="min-h-32"
-            value={content}
-            onChange={(e) => onContentChange(e.target.value)}
-            onBlur={flushSave}
-          />
+          <>
+            <Textarea
+              className="min-h-32"
+              value={field.value}
+              maxLength={NARRATIVE_FIELD_MAX}
+              disabled={regenerating}
+              onChange={(e) => field.onChange(e.target.value)}
+              onBlur={field.flush}
+            />
+            <p className="text-xs text-muted-foreground">
+              {field.value.length.toLocaleString()} /{" "}
+              {NARRATIVE_FIELD_MAX.toLocaleString()} characters
+            </p>
+          </>
         ) : (
           <p className="whitespace-pre-wrap text-sm text-foreground">
-            {content}
+            {field.value}
           </p>
         )}
       </CardContent>
@@ -513,15 +706,84 @@ function SectionCard({
 function ActionBar({
   proposal,
   isOwner,
+  isManager,
   router,
+  onBusyChange,
 }: {
   proposal: SerializedProposal;
   isOwner: boolean;
+  isManager: boolean;
   router: ReturnType<typeof useRouter>;
+  onBusyChange: (isBusy: boolean) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
   const [attachPdf, setAttachPdf] = useState(false);
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectionNote, setRejectionNote] = useState("");
+  const isMountedRef = useRef(true);
+  // PDFs are generated on-demand (no cached pdfUrl anymore) — available once
+  // there's final, approved-or-later content to render.
+  const canExportPdf =
+    proposal.status !== "DRAFT" && proposal.status !== "PENDING_APPROVAL";
+
+  useEffect(() => {
+    onBusyChange(busy);
+    return () => onBusyChange(false);
+  }, [busy, onBusyChange]);
+
+  useEffect(() => {
+    // Reset on mount, not just declared once — React Strict Mode's dev-only
+    // mount->cleanup->mount cycle would otherwise leave this stuck at false
+    // after the simulated unmount, permanently blocking real navigation.
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  async function approve() {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/proposals/${proposal.id}/approve`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        toast.error(body.error || "Couldn't approve this proposal.");
+        return;
+      }
+      toast.success("Approved.");
+      router.refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function reject() {
+    if (!rejectionNote.trim()) {
+      toast.error("A rejection note is required.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/proposals/${proposal.id}/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ note: rejectionNote }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        toast.error(body.error || "Couldn't reject this proposal.");
+        return;
+      }
+      toast.success("Rejected.");
+      setRejectOpen(false);
+      router.refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function submitForApproval() {
     setBusy(true);
@@ -541,6 +803,7 @@ function ActionBar({
   }
 
   async function send() {
+    const isResend = proposal.status === "SENT";
     setBusy(true);
     try {
       const res = await fetch(`/api/proposals/${proposal.id}/send`, {
@@ -553,7 +816,9 @@ function ActionBar({
         toast.error(body.error || "Failed to send. Please try again.");
         return;
       }
-      toast.success("Proposal sent to client.");
+      toast.success(
+        isResend ? "Proposal resent to client." : "Proposal sent to client.",
+      );
       setSendOpen(false);
       router.refresh();
     } finally {
@@ -572,10 +837,47 @@ function ActionBar({
         return;
       }
       const { id } = await res.json();
-      router.push(`/proposals/${id}`);
+      toast.success("New draft created.");
+      // If the user already navigated away (e.g. clicked Back before this
+      // resolved), don't yank them forward to the new draft — the clone
+      // still exists, they can find it from the dashboard.
+      if (isMountedRef.current) router.push(`/proposals/${id}`);
     } finally {
       setBusy(false);
     }
+  }
+
+  if (proposal.status === "PENDING_APPROVAL" && isManager) {
+    return (
+      <div className="flex gap-2">
+        <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
+          <Button variant="outline" onClick={() => setRejectOpen(true)}>
+            Reject
+          </Button>
+          <DialogContent>
+            <DialogTitle>Reject proposal</DialogTitle>
+            <DialogDescription className="mt-2">
+              A note is required so the salesperson knows what to fix.
+            </DialogDescription>
+            <Textarea
+              className="mt-4"
+              value={rejectionNote}
+              onChange={(e) => setRejectionNote(e.target.value)}
+              placeholder="What needs to change?"
+            />
+            <div className="mt-6 flex justify-end gap-2">
+              <DialogClose render={<Button variant="outline">Close</Button>} />
+              <Button variant="destructive" disabled={busy} onClick={reject}>
+                {busy ? "Rejecting…" : "Reject"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+        <Button disabled={busy} onClick={approve}>
+          Approve
+        </Button>
+      </div>
+    );
   }
 
   if (!isOwner) return null;
@@ -588,15 +890,35 @@ function ActionBar({
     );
   }
 
-  if (proposal.status === "APPROVED") {
+  if (proposal.status === "APPROVED" || proposal.status === "SENT") {
+    const isResend = proposal.status === "SENT";
     return (
       <div className="flex gap-2">
         <Dialog open={sendOpen} onOpenChange={setSendOpen}>
-          <Button onClick={() => setSendOpen(true)}>Send to Client</Button>
+          <Button onClick={() => setSendOpen(true)}>
+            {isResend ? "Resend to Client" : "Send to Client"}
+          </Button>
           <DialogContent>
-            <DialogTitle>Send to {proposal.clientName}</DialogTitle>
+            <DialogTitle>
+              {isResend ? "Resend to" : "Send to"} {proposal.clientName}
+            </DialogTitle>
             <DialogDescription className="mt-2">
               This will email the proposal link to {proposal.clientEmail}.
+              {isResend && (
+                <>
+                  {" "}
+                  You already sent this proposal
+                  {proposal.sentAt
+                    ? ` on ${new Date(proposal.sentAt).toLocaleString([], {
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}`
+                    : " before"}
+                  .
+                </>
+              )}
             </DialogDescription>
             <label className="mt-4 flex items-center gap-2 text-sm">
               <input
@@ -607,14 +929,19 @@ function ActionBar({
               Attach PDF copy
             </label>
             <div className="mt-6 flex justify-end gap-2">
-              <DialogClose render={<Button variant="outline">Cancel</Button>} />
+              <DialogClose render={<Button variant="outline">Close</Button>} />
               <Button disabled={busy} onClick={send}>
-                {busy ? "Sending…" : "Send"}
+                {busy ? "Sending…" : isResend ? "Resend" : "Send"}
               </Button>
             </div>
           </DialogContent>
         </Dialog>
-        {proposal.pdfUrl && (
+        {isResend && (
+          <Button variant="outline" disabled={busy} onClick={clone}>
+            Clone to New Draft
+          </Button>
+        )}
+        {canExportPdf && (
           <a
             href={`/api/proposals/${proposal.id}/pdf`}
             className="inline-flex h-9 items-center rounded-md border border-border px-4 text-sm font-medium hover:bg-muted"
@@ -626,15 +953,13 @@ function ActionBar({
     );
   }
 
-  if (proposal.status === "SENT" || proposal.status === "REJECTED") {
+  if (proposal.status === "REJECTED") {
     return (
       <div className="flex gap-2">
         <Button disabled={busy} onClick={clone}>
-          {proposal.status === "REJECTED"
-            ? "Revise & Create New Draft"
-            : "Clone to New Draft"}
+          Revise & Create New Draft
         </Button>
-        {proposal.pdfUrl && (
+        {canExportPdf && (
           <a
             href={`/api/proposals/${proposal.id}/pdf`}
             className="inline-flex h-9 items-center rounded-md border border-border px-4 text-sm font-medium hover:bg-muted"

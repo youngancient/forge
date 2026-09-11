@@ -71,3 +71,20 @@ accounts so activity logs line up with real users.
 | Proposed Timeline | Week 1: platform selection & menu data prep. Week 2: system configuration & integration testing. Week 3: staff training. Week 4: cutover weekend (Friday close to Monday open) + 2-week hypercare. |
 | Estimated Pricing | $5,200 one-time setup and migration fee, plus $149/month ongoing platform and support retainer (month-to-month, no lock-in). |
 | Supporting Notes (optional) | Call notes: Theo stressed that the actual cutover cannot happen on a Friday or Saturday night — those are his two busiest nights of the week — so it needs to be scheduled for a Monday or Tuesday even if that pushes the timeline slightly. He's also nervous about staff pushback since two of his longest-tenured servers "hate change," so he asked that training be hands-on and in-person, not a video link. Mentioned in passing that he's already paying for DoorDash/UberEats commissions separately and isn't looking to renegotiate those — just wants the order flow fixed. |
+
+## Sample 5 — Bakery e-commerce & subscription boxes (Jude)
+
+| Field | Value |
+|---|---|
+| Client Name | Lena Osei |
+| Client Email | lena@flourandsalt.bakery |
+| Company Name | Flour & Salt Bakery |
+| Date of Call | 2026-09-10 |
+| Salesperson Name | Jude |
+| Summary of Client's Needs | Lena runs a single-location artisan bakery and currently only takes orders in-person or via Instagram DMs. She wants an online store for one-off orders (cakes, pastry boxes) plus a recurring "bread of the month" subscription box, since several regulars have asked to auto-order weekly. |
+| Project Scope | E-commerce site (5 pages: home, shop, subscriptions, about, contact) built on Shopify, one-off product catalog with local-pickup/delivery-radius checkout, a recurring subscription product flow (weekly/biweekly/monthly cadence, pause/skip/cancel self-service), and email order confirmations. |
+| Goals and Objectives | Launch before the holiday gifting season (mid-November) to capture holiday pastry-box orders. Get subscriptions to a self-service point where Lena isn't manually charging cards each week. Reduce missed/duplicate Instagram DM orders to zero. |
+| Recommended Services or Deliverables | Shopify store build (5 pages), Shopify Subscriptions app configuration (pause/skip/cancel), local delivery-radius + pickup-slot checkout logic, order confirmation email templates, 1 training session for Lena's staff on fulfilling online orders. |
+| Proposed Timeline | Week 1: product catalog & subscription plan setup. Week 2: design & checkout flow build. Week 3: delivery-radius logic & email templates. Week 4: staff training, QA, and launch ahead of mid-November. |
+| Estimated Pricing | $7,200 flat build fee, 50% deposit / 50% on launch, plus Shopify's own monthly platform + transaction fees paid directly by Flour & Salt. |
+| Supporting Notes (optional) | Call notes: Lena was firm that pickup slots need a hard daily cap (her ovens can't handle unlimited same-day pickup orders) — this isn't just a nice-to-have, it's operationally required at launch, not a phase 2. She also mentioned two regulars already asked about gifting subscriptions to other people, so gift-subscription purchasing would be a "nice to have" if it fits the timeline, but she's fine deferring it if it risks the November date. |

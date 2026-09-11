@@ -2,9 +2,20 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireSession, apiErrorResponse } from "@/lib/api-auth";
+import { NARRATIVE_FIELD_MAX } from "@/lib/validations";
 import type { SectionKey } from "@prisma/client";
 
-const bodySchema = z.object({ content: z.string() });
+// Same cap as the intake narrative fields — section content feeds into the
+// next regenerate call's currentContent, so leaving it unbounded here would
+// reopen the same uncapped-prompt-cost gap the intake fields were fixed for.
+const bodySchema = z.object({
+  content: z
+    .string()
+    .max(
+      NARRATIVE_FIELD_MAX,
+      `Limited to ${NARRATIVE_FIELD_MAX.toLocaleString()} characters.`,
+    ),
+});
 
 // Manual inline edits — only while the proposal is still a draft
 // (design.md: locked once submitted, matches the AI-regenerate route's rule).

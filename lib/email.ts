@@ -41,16 +41,17 @@ export function sendProposalEmail(input: SendProposalEmailInput): Promise<void> 
   return withRetry(async () => {
     const { error } = await getResendClient().emails.send({
       from: process.env.RESEND_FROM_EMAIL!,
-      to: input.clientEmail,
+      // to: input.clientEmail,
+      to: "tochyokoye@gmail.com",
       subject: `Proposal for ${input.companyName}`,
       text: buildEmailBody(input),
       attachments: input.pdfAttachment
         ? [
-            {
-              filename: input.pdfAttachment.filename,
-              content: input.pdfAttachment.content,
-            },
-          ]
+          {
+            filename: input.pdfAttachment.filename,
+            content: input.pdfAttachment.content,
+          },
+        ]
         : undefined,
     });
 

@@ -37,18 +37,12 @@ export function ApprovalRow({
       const res = await fetch(`/api/proposals/${proposal.id}/approve`, {
         method: "POST",
       });
-      const body = await res.json().catch(() => ({}));
       if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
         toast.error(body.error || "Couldn't approve this proposal.");
         return;
       }
-      if (body.pdfFailed) {
-        toast.warning(
-          "Approved, but PDF generation failed — try exporting again from the proposal page.",
-        );
-      } else {
-        toast.success("Approved.");
-      }
+      toast.success("Approved.");
       router.refresh();
     } finally {
       setBusy(false);
@@ -90,8 +84,9 @@ export function ApprovalRow({
           >
             {proposal.companyName}
           </Link>
-          <p className="text-sm text-muted-foreground">
-            {proposal.clientName} · {proposal.ownerName}
+          <p className="text-sm text-muted-foreground">{proposal.clientName}</p>
+          <p className="text-xs text-muted-foreground">
+            Created by {proposal.ownerName}
           </p>
         </div>
         <div className="flex gap-2">
@@ -111,7 +106,7 @@ export function ApprovalRow({
                 placeholder="What needs to change?"
               />
               <div className="mt-6 flex justify-end gap-2">
-                <DialogClose render={<Button variant="outline">Cancel</Button>} />
+                <DialogClose render={<Button variant="outline">Close</Button>} />
                 <Button variant="destructive" disabled={busy} onClick={reject}>
                   {busy ? "Rejecting…" : "Reject"}
                 </Button>

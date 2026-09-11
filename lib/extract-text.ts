@@ -48,8 +48,11 @@ export async function extractTextFromFile(
     throw new ExtractionError(`Unsupported file type: ${file.type}`);
   } catch (error) {
     if (error instanceof ExtractionError) throw error;
+    // Raw parser errors (pdf-parse/mammoth internals) are logged server-side
+    // only — never forwarded into the client-facing message.
+    console.error("File extraction failed:", error);
     throw new ExtractionError(
-      `Could not read file (corrupted or password-protected): ${String(error)}`,
+      "Could not read file (corrupted or password-protected).",
     );
   }
 }

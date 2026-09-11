@@ -10,6 +10,7 @@ const MODEL = "claude-sonnet-5";
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const sectionsSchema = z.object({
+  title: z.string().min(1).max(200),
   introduction: z.string().min(1),
   proposedSolution: z.string().min(1),
   deliverables: z.string().min(1),
@@ -26,6 +27,11 @@ const SECTIONS_TOOL: Anthropic.Tool = {
   input_schema: {
     type: "object",
     properties: {
+      title: {
+        type: "string",
+        description:
+          "A short, specific, client/project-identifying title for this proposal (e.g. \"Acme Corp — Q3 Website Redesign\"), under 80 characters. Not a generic label like \"Business Proposal\".",
+      },
       introduction: {
         type: "string",
         description:
@@ -54,6 +60,7 @@ const SECTIONS_TOOL: Anthropic.Tool = {
       },
     },
     required: [
+      "title",
       "introduction",
       "proposedSolution",
       "deliverables",
@@ -71,7 +78,7 @@ Rules:
 - Write in a warm, professional, confident tone suitable for sending directly to a client.
 - If supporting material is provided, weave in specific, relevant details from it rather than writing generically.
 - Write in plain text only — never use markdown formatting (no **bold**, no # headers, no markdown links). This content is displayed on-screen, exported to PDF, and emailed to the client as plain text, not rendered as markdown, so formatting syntax would show up literally. Plain paragraph breaks and a simple "-" for list items are fine.
-- Call the write_proposal_sections tool exactly once with the full content for every section.`;
+- Call the write_proposal_sections tool exactly once with the title and the full content for every section.`;
 
 export interface GenerationInput {
   clientName: string;

@@ -2,12 +2,12 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 
 const SECTION_LABEL: Record<string, string> = {
-  INTRODUCTION: "1. Introduction",
-  PROPOSED_SOLUTION: "2. Proposed Solution",
-  DELIVERABLES: "3. Deliverables",
-  TIMELINE: "4. Timeline",
-  PRICING: "5. Pricing",
-  NEXT_STEPS: "6. Next Steps",
+  INTRODUCTION: "Introduction",
+  PROPOSED_SOLUTION: "Proposed Solution",
+  DELIVERABLES: "Deliverables",
+  TIMELINE: "Timeline",
+  PRICING: "Pricing",
+  NEXT_STEPS: "Next Steps",
 };
 
 export default async function PublicProposalPage({

@@ -9,13 +9,12 @@ approved proposal is emailed to the client and logged.
 
 Next.js (App Router) + TypeScript + Tailwind, Neon (Postgres) via Prisma,
 Auth.js (credentials login), Claude (Sonnet 5) for generation, Resend for
-email, Vercel Blob for file storage, a Discord bot for failure alerts.
+email, a Discord bot for failure alerts.
 
 ## Setup
 
 1. Copy `.env.example` to `.env` and fill in real values (Neon connection
-   string, Anthropic key, Resend key, Vercel Blob token, Discord bot
-   token/channel).
+   string, Anthropic key, Resend key, Discord bot token/channel).
 2. Install dependencies and set up the database:
    ```
    npm install

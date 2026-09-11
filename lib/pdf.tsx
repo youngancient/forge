@@ -1,6 +1,5 @@
 import { Document, Page, Text, View, StyleSheet, renderToBuffer } from "@react-pdf/renderer";
 import { withRetry } from "@/lib/retry";
-import { uploadBlob } from "@/lib/blob";
 
 const styles = StyleSheet.create({
   page: { padding: 48, fontSize: 11, fontFamily: "Helvetica", lineHeight: 1.5 },
@@ -27,12 +26,12 @@ export interface ProposalPdfInput {
 // Structure follows artifact/proposal-template.md (design.md decision).
 function ProposalDocument(p: ProposalPdfInput) {
   const sections: Array<[string, string]> = [
-    ["1. Introduction", p.introduction],
-    ["2. Proposed Solution", p.proposedSolution],
-    ["3. Deliverables", p.deliverables],
-    ["4. Timeline", p.timeline],
-    ["5. Pricing", p.pricing],
-    ["6. Next Steps", p.nextSteps],
+    ["Introduction", p.introduction],
+    ["Proposed Solution", p.proposedSolution],
+    ["Deliverables", p.deliverables],
+    ["Timeline", p.timeline],
+    ["Pricing", p.pricing],
+    ["Next Steps", p.nextSteps],
   ];
 
   return (
@@ -53,12 +52,40 @@ function ProposalDocument(p: ProposalPdfInput) {
   );
 }
 
-// Generated once at approval and reused thereafter (design.md decision #4) —
-// retried on transient failure like the other external calls (decision #16).
+// Rendered fresh on every export/attach request — a deterministic template
+// render from already-immutable (post-approval) section content, so no
+// persistent storage is needed. Revised 2026-09-11 to drop Vercel Blob as a
+// dependency (see design.md decisions #4/#14) — retried on transient failure
+// like the other external calls (decision #16).
 export async function generateProposalPdf(
-  proposalId: string,
   input: ProposalPdfInput,
-): Promise<string> {
-  const buffer = await withRetry(() => renderToBuffer(<ProposalDocument {...input} />));
-  return uploadBlob(`proposals/${proposalId}.pdf`, buffer, "application/pdf");
+): Promise<Buffer> {
+  return withRetry(() => renderToBuffer(<ProposalDocument {...input} />));
+}
+
+// Shared by the export route and the send-with-attachment path so the
+// sectionKey -> ProposalPdfInput mapping only lives in one place.
+export function buildProposalPdfInput(
+  proposal: {
+    clientName: string;
+    companyName: string;
+    salespersonName: string;
+    dateOfCall: Date;
+  },
+  sections: { sectionKey: string; content: string }[],
+): ProposalPdfInput {
+  const section = (key: string) =>
+    sections.find((s) => s.sectionKey === key)?.content ?? "";
+  return {
+    clientName: proposal.clientName,
+    companyName: proposal.companyName,
+    salespersonName: proposal.salespersonName,
+    dateOfCall: proposal.dateOfCall.toDateString(),
+    introduction: section("INTRODUCTION"),
+    proposedSolution: section("PROPOSED_SOLUTION"),
+    deliverables: section("DELIVERABLES"),
+    timeline: section("TIMELINE"),
+    pricing: section("PRICING"),
+    nextSteps: section("NEXT_STEPS"),
+  };
 }

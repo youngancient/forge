@@ -69,6 +69,10 @@ export async function runGeneration(proposalId: string): Promise<void> {
     await withRetry(
       () =>
         prisma.$transaction([
+          prisma.proposal.update({
+            where: { id: proposalId },
+            data: { title: sections.title },
+          }),
           ...SECTION_ORDER.map((sectionKey, position) =>
             prisma.proposalSection.upsert({
               where: { proposalId_sectionKey: { proposalId, sectionKey } },

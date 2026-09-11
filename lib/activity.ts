@@ -8,14 +8,26 @@ export async function logActivity(
   action: ActivityAction,
   options: { actorId?: string; detail?: string } = {},
 ): Promise<void> {
-  await prisma.activityLog.create({
-    data: {
-      proposalId,
-      action,
-      actorId: options.actorId,
-      detail: options.detail,
-    },
-  });
+  try {
+    await prisma.activityLog.create({
+      data: {
+        proposalId,
+        action,
+        actorId: options.actorId,
+        detail: options.detail,
+      },
+    });
+  } catch (error) {
+    // The real operation this call is logging has already succeeded by the
+    // time this runs — a DB hiccup writing the log entry must never surface
+    // as a failure of that operation. Best-effort visibility instead
+    // (console + Discord), not a second activityLog write — that's the
+    // thing that just failed.
+    console.error(`logActivity failed for ${action} on ${proposalId}:`, error);
+    void sendDiscordAlert(
+      `⚠️ Forge: failed to record activity log entry (${action}) for proposal ${proposalId} — ${String(error)}`,
+    );
+  }
 
   if (FAILURE_ACTIONS.includes(action)) {
     // best-effort, never throws (design.md: Failure Handling)
