@@ -9,7 +9,11 @@ export default auth((req) => {
   const isAuthed = !!req.auth;
   const role = req.auth?.user?.role;
 
-  if (pathname.startsWith("/p/") || pathname.startsWith("/api/auth")) {
+  if (
+    pathname.startsWith("/p/") ||
+    pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/api/public/")
+  ) {
     return NextResponse.next();
   }
 

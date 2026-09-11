@@ -33,9 +33,17 @@ export default async function PublicProposalPage({
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-16">
-      <h1 className="text-3xl font-semibold tracking-[-0.02em]">
-        Proposal for {proposal.clientName}
-      </h1>
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+        <h1 className="text-3xl font-semibold tracking-[-0.02em]">
+          Proposal for {proposal.clientName}
+        </h1>
+        <a
+          href={`/api/public/${token}/pdf`}
+          className="inline-flex h-9 w-fit shrink-0 items-center rounded-md border border-border px-4 text-sm font-medium hover:bg-muted"
+        >
+          Download PDF
+        </a>
+      </div>
       <p className="mt-2 text-sm text-muted-foreground">
         Prepared by {proposal.owner.name} &lt;
         <a href={`mailto:${proposal.owner.email}`} className="underline hover:text-foreground">
@@ -46,13 +54,6 @@ export default async function PublicProposalPage({
       <p className="text-sm text-muted-foreground">
         Date: {proposal.dateOfCall.toDateString()}
       </p>
-
-      <a
-        href={`/api/public/${token}/pdf`}
-        className="mt-6 inline-flex h-9 w-fit items-center rounded-md border border-border px-4 text-sm font-medium hover:bg-muted"
-      >
-        Download PDF
-      </a>
 
       <div className="mt-10 flex flex-col gap-10">
         {proposal.sections.map((section) => (
