@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { STATUS_LABEL, STATUS_BADGE_VARIANT } from "@/lib/status";
 import { DeleteProposalButton } from "./delete-proposal-button";
+import { SendProposalButton } from "./send-proposal-button";
 import { DashboardToolbar } from "./dashboard-toolbar";
 
 const STATUS_VALUES = Object.keys(STATUS_LABEL);
@@ -130,6 +131,16 @@ export default async function DashboardPage({
                     companyName={p.companyName}
                   />
                 )}
+                {p.status === "APPROVED" &&
+                  !p.sentAt &&
+                  p.ownerId === session!.user.id && (
+                    <SendProposalButton
+                      proposalId={p.id}
+                      companyName={p.companyName}
+                      clientName={p.clientName}
+                      clientEmail={p.clientEmail}
+                    />
+                  )}
               </div>
             </div>
           ))}
