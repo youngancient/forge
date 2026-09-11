@@ -3,7 +3,7 @@ import { withRetry } from "@/lib/retry";
 
 const styles = StyleSheet.create({
   page: { padding: 48, fontSize: 11, fontFamily: "Helvetica", lineHeight: 1.5 },
-  title: { fontSize: 20, marginBottom: 4 },
+  title: { fontSize: 20, marginBottom: 10 },
   meta: { fontSize: 10, color: "#52525b", marginBottom: 2 },
   section: { marginTop: 20 },
   sectionTitle: { fontSize: 13, marginBottom: 6, fontFamily: "Helvetica-Bold" },
