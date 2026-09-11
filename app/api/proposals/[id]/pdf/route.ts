@@ -25,7 +25,7 @@ export async function GET(
 
     const proposal = await prisma.proposal.findUniqueOrThrow({
       where: { id },
-      include: { sections: true },
+      include: { sections: true, owner: { select: { name: true } } },
     });
     if (
       proposal.ownerId !== session.user.id &&

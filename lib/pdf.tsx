@@ -13,7 +13,7 @@ const styles = StyleSheet.create({
 export interface ProposalPdfInput {
   clientName: string;
   companyName: string;
-  salespersonName: string;
+  preparedByName: string;
   dateOfCall: string;
   introduction: string;
   proposedSolution: string;
@@ -38,7 +38,7 @@ function ProposalDocument(p: ProposalPdfInput) {
     <Document>
       <Page size="A4" style={styles.page}>
         <Text style={styles.title}>Proposal for {p.clientName}</Text>
-        <Text style={styles.meta}>Prepared by {p.salespersonName}</Text>
+        <Text style={styles.meta}>Prepared by {p.preparedByName}</Text>
         <Text style={styles.meta}>Date: {p.dateOfCall}</Text>
 
         {sections.map(([title, body]) => (
@@ -69,8 +69,8 @@ export function buildProposalPdfInput(
   proposal: {
     clientName: string;
     companyName: string;
-    salespersonName: string;
     dateOfCall: Date;
+    owner: { name: string };
   },
   sections: { sectionKey: string; content: string }[],
 ): ProposalPdfInput {
@@ -79,7 +79,7 @@ export function buildProposalPdfInput(
   return {
     clientName: proposal.clientName,
     companyName: proposal.companyName,
-    salespersonName: proposal.salespersonName,
+    preparedByName: proposal.owner.name,
     dateOfCall: proposal.dateOfCall.toDateString(),
     introduction: section("INTRODUCTION"),
     proposedSolution: section("PROPOSED_SOLUTION"),

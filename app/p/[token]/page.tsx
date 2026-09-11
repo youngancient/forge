@@ -19,7 +19,10 @@ export default async function PublicProposalPage({
 
   const proposal = await prisma.proposal.findUnique({
     where: { publicToken: token },
-    include: { sections: { orderBy: { position: "asc" } } },
+    include: {
+      sections: { orderBy: { position: "asc" } },
+      owner: { select: { name: true } },
+    },
   });
 
   // Only ever visible once approved — a leaked token before approval must
@@ -34,7 +37,7 @@ export default async function PublicProposalPage({
         Proposal for {proposal.clientName}
       </h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        Prepared by {proposal.salespersonName}
+        Prepared by {proposal.owner.name}
       </p>
       <p className="text-sm text-muted-foreground">
         Date: {proposal.dateOfCall.toDateString()}
