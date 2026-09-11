@@ -14,6 +14,7 @@ export interface ProposalPdfInput {
   clientName: string;
   companyName: string;
   preparedByName: string;
+  preparedByEmail: string;
   dateOfCall: string;
   introduction: string;
   proposedSolution: string;
@@ -38,7 +39,9 @@ function ProposalDocument(p: ProposalPdfInput) {
     <Document>
       <Page size="A4" style={styles.page}>
         <Text style={styles.title}>Proposal for {p.clientName}</Text>
-        <Text style={styles.meta}>Prepared by {p.preparedByName}</Text>
+        <Text style={styles.meta}>
+          Prepared by {p.preparedByName} &lt;{p.preparedByEmail}&gt;
+        </Text>
         <Text style={styles.meta}>Date: {p.dateOfCall}</Text>
 
         {sections.map(([title, body]) => (
@@ -70,7 +73,7 @@ export function buildProposalPdfInput(
     clientName: string;
     companyName: string;
     dateOfCall: Date;
-    owner: { name: string };
+    owner: { name: string; email: string };
   },
   sections: { sectionKey: string; content: string }[],
 ): ProposalPdfInput {
@@ -80,6 +83,7 @@ export function buildProposalPdfInput(
     clientName: proposal.clientName,
     companyName: proposal.companyName,
     preparedByName: proposal.owner.name,
+    preparedByEmail: proposal.owner.email,
     dateOfCall: proposal.dateOfCall.toDateString(),
     introduction: section("INTRODUCTION"),
     proposedSolution: section("PROPOSED_SOLUTION"),

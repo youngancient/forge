@@ -21,7 +21,7 @@ export default async function PublicProposalPage({
     where: { publicToken: token },
     include: {
       sections: { orderBy: { position: "asc" } },
-      owner: { select: { name: true } },
+      owner: { select: { name: true, email: true } },
     },
   });
 
@@ -37,11 +37,22 @@ export default async function PublicProposalPage({
         Proposal for {proposal.clientName}
       </h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        Prepared by {proposal.owner.name}
+        Prepared by {proposal.owner.name} &lt;
+        <a href={`mailto:${proposal.owner.email}`} className="underline hover:text-foreground">
+          {proposal.owner.email}
+        </a>
+        &gt;
       </p>
       <p className="text-sm text-muted-foreground">
         Date: {proposal.dateOfCall.toDateString()}
       </p>
+
+      <a
+        href={`/api/public/${token}/pdf`}
+        className="mt-6 inline-flex h-9 w-fit items-center rounded-md border border-border px-4 text-sm font-medium hover:bg-muted"
+      >
+        Download PDF
+      </a>
 
       <div className="mt-10 flex flex-col gap-10">
         {proposal.sections.map((section) => (

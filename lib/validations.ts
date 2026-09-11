@@ -54,7 +54,15 @@ export const proposalIntakeSchema = z.object({
     .max(DATE_MAX, `Limited to ${DATE_MAX} characters.`)
     .refine((value) => !Number.isNaN(Date.parse(value)), {
       message: "Enter a valid date.",
-    }),
+    })
+    .refine(
+      (value) => {
+        const endOfToday = new Date();
+        endOfToday.setHours(23, 59, 59, 999);
+        return new Date(value).getTime() <= endOfToday.getTime();
+      },
+      { message: "Date of call cannot be in the future." },
+    ),
   salespersonName: z
     .string()
     .trim()

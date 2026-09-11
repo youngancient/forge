@@ -80,8 +80,17 @@ const FIELDS: Array<{
   },
 ];
 
+// Local (not UTC) so the picker's cutoff matches the user's own clock.
+function todayDateInputValue(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
 export default function NewProposalPage() {
   const router = useRouter();
+  const todayInputValue = todayDateInputValue();
   const [submitting, setSubmitting] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [extractionDialogOpen, setExtractionDialogOpen] = useState(false);
@@ -242,6 +251,7 @@ export default function NewProposalPage() {
                     type={field.type ?? "text"}
                     disabled={submitting}
                     maxLength={field.maxLength}
+                    max={field.type === "date" ? todayInputValue : undefined}
                     onClick={
                       field.type === "date"
                         ? (e) => e.currentTarget.showPicker?.()

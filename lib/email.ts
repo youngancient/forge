@@ -13,6 +13,7 @@ export interface SendProposalEmailInput {
   clientName: string;
   companyName: string;
   preparedByName: string;
+  preparedByEmail: string;
   proposalLink: string;
   pdfAttachment?: { filename: string; content: Buffer };
 }
@@ -34,6 +35,7 @@ Looking forward to hearing your thoughts.
 Best regards,
 
 ${input.preparedByName}
+${input.preparedByEmail}
 Koya Talent`;
 }
 

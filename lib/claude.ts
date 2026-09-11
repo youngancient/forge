@@ -78,6 +78,7 @@ Rules:
 - Write in a warm, professional, confident tone suitable for sending directly to a client.
 - If supporting material is provided, weave in specific, relevant details from it rather than writing generically.
 - Write in plain text only — never use markdown formatting (no **bold**, no # headers, no markdown links). This content is displayed on-screen, exported to PDF, and emailed to the client as plain text, not rendered as markdown, so formatting syntax would show up literally. Plain paragraph breaks and a simple "-" for list items are fine.
+- The closing call-to-action in "Next Steps" must stay channel-neutral — e.g. "let us know when you're ready to move forward" rather than "reply to this email" — since the client may be reading this as a PDF or on the hosted proposal page, not just in an email.
 - Call the write_proposal_sections tool exactly once with the title and the full content for every section.`;
 
 export interface GenerationInput {

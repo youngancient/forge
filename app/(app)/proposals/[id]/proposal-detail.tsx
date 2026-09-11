@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, ChevronDown } from "lucide-react";
+import { ArrowLeft, ChevronDown, Loader2 } from "lucide-react";
 import type { ActivityAction, ProposalStatus, SectionKey } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Textarea, Input } from "@/components/ui/input";
@@ -703,6 +703,47 @@ function SectionCard({
   );
 }
 
+function PreviewPdfButton({ proposalId }: { proposalId: string }) {
+  const [open, setOpen] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        // reset so the loader shows again next time this dialog is opened
+        if (!next) setLoaded(false);
+      }}
+    >
+      <Button variant="outline" onClick={() => setOpen(true)}>
+        Preview PDF
+      </Button>
+      <DialogContent className="flex h-[85vh] w-full max-w-3xl flex-col p-4">
+        <div className="flex items-center justify-between">
+          <DialogTitle>Preview PDF</DialogTitle>
+          <DialogClose render={<Button variant="ghost" size="sm">Close</Button>} />
+        </div>
+        <div className="relative mt-3 flex-1">
+          {!loaded && (
+            <div className="absolute inset-0 flex items-center justify-center rounded-md border border-border bg-muted/30">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          )}
+          {open && (
+            <iframe
+              src={`/api/proposals/${proposalId}/pdf?inline=1`}
+              title="Proposal PDF preview"
+              onLoad={() => setLoaded(true)}
+              className="h-full w-full rounded-md border border-border"
+            />
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ActionBar({
   proposal,
   isOwner,
@@ -726,6 +767,10 @@ function ActionBar({
   // there's final, approved-or-later content to render.
   const canExportPdf =
     proposal.status !== "DRAFT" && proposal.status !== "PENDING_APPROVAL";
+  // Preview is allowed a stage earlier than export/download — a manager can
+  // preview exactly what the client would see while still deciding whether
+  // to approve or reject (matches PDF_AVAILABLE_STATUSES on the API route).
+  const canPreviewPdf = proposal.status !== "DRAFT";
 
   useEffect(() => {
     onBusyChange(busy);
@@ -850,6 +895,7 @@ function ActionBar({
   if (proposal.status === "PENDING_APPROVAL" && isManager) {
     return (
       <div className="flex gap-2">
+        {canPreviewPdf && <PreviewPdfButton proposalId={proposal.id} />}
         <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
           <Button variant="outline" onClick={() => setRejectOpen(true)}>
             Reject
@@ -880,7 +926,19 @@ function ActionBar({
     );
   }
 
-  if (!isOwner) return null;
+  if (!isOwner) {
+    // Not this proposal's owner. A manager can still preview the PDF for any
+    // non-draft proposal they're allowed to view (page-level `canView` gate) —
+    // export/send/clone stay owner-only.
+    if (isManager && canPreviewPdf) {
+      return (
+        <div className="flex gap-2">
+          <PreviewPdfButton proposalId={proposal.id} />
+        </div>
+      );
+    }
+    return null;
+  }
 
   if (proposal.status === "DRAFT") {
     return (
@@ -942,12 +1000,15 @@ function ActionBar({
           </Button>
         )}
         {canExportPdf && (
-          <a
-            href={`/api/proposals/${proposal.id}/pdf`}
-            className="inline-flex h-9 items-center rounded-md border border-border px-4 text-sm font-medium hover:bg-muted"
-          >
-            Export PDF
-          </a>
+          <>
+            <PreviewPdfButton proposalId={proposal.id} />
+            <a
+              href={`/api/proposals/${proposal.id}/pdf`}
+              className="inline-flex h-9 items-center rounded-md border border-border px-4 text-sm font-medium hover:bg-muted"
+            >
+              Export PDF
+            </a>
+          </>
         )}
       </div>
     );
@@ -960,12 +1021,15 @@ function ActionBar({
           Revise & Create New Draft
         </Button>
         {canExportPdf && (
-          <a
-            href={`/api/proposals/${proposal.id}/pdf`}
-            className="inline-flex h-9 items-center rounded-md border border-border px-4 text-sm font-medium hover:bg-muted"
-          >
-            Export PDF
-          </a>
+          <>
+            <PreviewPdfButton proposalId={proposal.id} />
+            <a
+              href={`/api/proposals/${proposal.id}/pdf`}
+              className="inline-flex h-9 items-center rounded-md border border-border px-4 text-sm font-medium hover:bg-muted"
+            >
+              Export PDF
+            </a>
+          </>
         )}
       </div>
     );

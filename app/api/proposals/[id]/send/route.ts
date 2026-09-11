@@ -25,7 +25,7 @@ export async function POST(
 
     const proposal = await prisma.proposal.findUniqueOrThrow({
       where: { id },
-      include: { sections: true, owner: { select: { name: true } } },
+      include: { sections: true, owner: { select: { name: true, email: true } } },
     });
     if (proposal.ownerId !== session.user.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -107,6 +107,7 @@ export async function POST(
         clientName: proposal.clientName,
         companyName: proposal.companyName,
         preparedByName: proposal.owner.name,
+        preparedByEmail: proposal.owner.email,
         proposalLink: `${process.env.NEXT_PUBLIC_APP_URL}/p/${proposal.publicToken}`,
         pdfAttachment,
       });
