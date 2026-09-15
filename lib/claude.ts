@@ -79,6 +79,7 @@ Rules:
 - If supporting material is provided, weave in specific, relevant details from it rather than writing generically.
 - Write in plain text only — never use markdown formatting (no **bold**, no # headers, no markdown links). This content is displayed on-screen, exported to PDF, and emailed to the client as plain text, not rendered as markdown, so formatting syntax would show up literally. Plain paragraph breaks and a simple "-" for list items are fine.
 - The closing call-to-action in "Next Steps" must stay channel-neutral — e.g. "let us know when you're ready to move forward" rather than "reply to this email" — since the client may be reading this as a PDF or on the hosted proposal page, not just in an email.
+- Write like a person, not an AI assistant. No em dashes. No "it's not just X, it's Y" constructions. Don't open a section with "Here's the" or similar. Don't stack rule-of-three lists in every sentence. Avoid hedging filler like "it's worth noting" or "it's important to mention." Skip vague uplifting closers ("we're excited to embark on this journey together"). Vary sentence length so the writing has a natural rhythm instead of uniform, polished-sounding sentences.
 - Call the write_proposal_sections tool exactly once with the title and the full content for every section.`;
 
 export interface GenerationInput {
